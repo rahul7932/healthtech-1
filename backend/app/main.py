@@ -6,6 +6,10 @@ from sqlalchemy import text
 
 from app.database import engine, Base
 
+# Import models so SQLAlchemy knows about them when creating tables
+# Without this import, Base.metadata.create_all() wouldn't know about Document
+from app.models.document import Document  # noqa: F401
+
 
 # =============================================================================
 # LIFESPAN: Startup and Shutdown Logic
