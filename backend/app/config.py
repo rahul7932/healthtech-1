@@ -5,8 +5,9 @@ from functools import lru_cache
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # Database
-    database_url: str = "postgresql+asyncpg://healthtech:healthtech_dev@localhost:5432/healthtech"
+    # Supabase Database
+    # Format: postgresql+asyncpg://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres
+    database_url: str
 
     # OpenAI
     openai_api_key: str = ""
