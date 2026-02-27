@@ -10,6 +10,9 @@ from app.database import engine, Base
 # Without this import, Base.metadata.create_all() wouldn't know about Document
 from app.models.document import Document  # noqa: F401
 
+# Import API routes
+from app.api.routes import router as api_router
+
 
 # =============================================================================
 # LIFESPAN: Startup and Shutdown Logic
@@ -72,6 +75,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include API routes
+# All routes will be prefixed with /api (defined in the router)
+app.include_router(api_router)
 
 
 @app.get("/health")
