@@ -248,6 +248,37 @@ async def ingest_documents(
 # DOCUMENT RETRIEVAL
 # =============================================================================
 
+# NOTE: /documents/count must come BEFORE /documents/{pmid} 
+# otherwise FastAPI matches "count" as a pmid
+
+@router.get("/documents/count")
+async def count_documents(
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """
+    Get document counts — useful to check if database is ready.
+    
+    Example:
+        GET /api/documents/count
+        Returns {"total": 100, "embedded": 95, "pending": 5}
+    """
+    # Total documents
+    total_result = await db.execute(select(func.count(Document.id)))
+    total = total_result.scalar()
+    
+    # Documents with embeddings
+    embedded_result = await db.execute(
+        select(func.count(Document.id)).where(Document.embedding.isnot(None))
+    )
+    embedded = embedded_result.scalar()
+    
+    return {
+        "total": total,
+        "embedded": embedded,
+        "pending": total - embedded,
+    }
+
+
 @router.get("/documents/{pmid}", response_model=DocumentResponse)
 async def get_document(
     pmid: str,
@@ -278,31 +309,3 @@ async def get_document(
         created_at=doc.created_at,
         has_embedding=doc.embedding is not None,
     )
-
-
-@router.get("/documents/count")
-async def count_documents(
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """
-    Get document counts — useful to check if database is ready.
-    
-    Example:
-        GET /api/documents/count
-        Returns {"total": 100, "embedded": 95, "pending": 5}
-    """
-    # Total documents
-    total_result = await db.execute(select(func.count(Document.id)))
-    total = total_result.scalar()
-    
-    # Documents with embeddings
-    embedded_result = await db.execute(
-        select(func.count(Document.id)).where(Document.embedding.isnot(None))
-    )
-    embedded = embedded_result.scalar()
-    
-    return {
-        "total": total,
-        "embedded": embedded,
-        "pending": total - embedded,
-    }
