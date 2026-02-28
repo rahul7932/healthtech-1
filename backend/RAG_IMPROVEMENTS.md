@@ -476,6 +476,142 @@ Let the system decide when retrieval is needed and iterate autonomously.
 
 ---
 
+## 7. Research: Multi-Agent Debate Architecture
+
+**Priority: Experimental | Effort: High**
+
+A novel approach where multiple agents each advocate for their assigned documents, then an orchestrator evaluates the arguments to synthesize the best answer.
+
+#### Concept
+
+Instead of a single RAG pipeline, create a "debate" between document-advocate agents:
+
+```
+Retrieved Documents (e.g., 10 papers)
+              ↓
+    ┌─────────┼─────────┐
+    ↓         ↓         ↓
+ Agent A   Agent B   Agent C
+ (Doc 1-3) (Doc 4-6) (Doc 7-10)
+    ↓         ↓         ↓
+ "Doc 2    "Doc 5    "Doc 8 
+  shows     shows     shows
+  X..."     Y..."     Z..."
+    ↓         ↓         ↓
+    └─────────┼─────────┘
+              ↓
+      Orchestrator Agent
+    (Evaluates all arguments,
+     resolves conflicts,
+     picks most logical conclusion)
+              ↓
+        Final Answer
+```
+
+#### Why This Could Work
+
+1. **Adversarial validation:** Weak evidence gets challenged by other agents
+2. **Conflict surfacing:** Contradictory findings are explicitly debated
+3. **Reasoning transparency:** Each agent must justify why their documents matter
+4. **Specialization:** Agents can focus deeply on fewer documents
+
+#### Proposed Architecture
+
+**Document Advocate Agents:**
+```python
+class DocumentAdvocate:
+    """
+    An agent that argues for the relevance and findings of assigned documents.
+    """
+    def __init__(self, documents: list[Document]):
+        self.documents = documents
+    
+    async def make_case(self, query: str) -> AdvocateResponse:
+        """
+        Analyze assigned documents and argue their relevance to the query.
+        
+        Returns:
+        - key_findings: What these documents contribute
+        - evidence_strength: Self-assessed strength (with justification)
+        - limitations: Acknowledged weaknesses
+        - recommended_conclusion: What answer these docs support
+        """
+        pass
+```
+
+**Orchestrator Agent:**
+```python
+class DebateOrchestrator:
+    """
+    Evaluates arguments from all advocates and synthesizes final answer.
+    """
+    async def evaluate_debate(
+        self, 
+        query: str,
+        advocate_responses: list[AdvocateResponse]
+    ) -> FinalVerdict:
+        """
+        - Identify consensus vs. conflicts
+        - Weigh evidence quality (study type, sample size, recency)
+        - Resolve contradictions with reasoning
+        - Produce final answer with confidence
+        """
+        pass
+```
+
+#### Debate Protocol
+
+1. **Opening arguments:** Each advocate presents key findings from their documents
+2. **Cross-examination:** Orchestrator asks follow-up questions to advocates
+3. **Rebuttal:** Advocates can challenge other advocates' claims
+4. **Closing:** Orchestrator synthesizes final answer
+
+#### Potential Benefits
+
+- Better handling of **conflicting evidence** (common in medicine)
+- More **transparent reasoning** about why certain evidence was weighted higher
+- **Reduced hallucination** — harder to make up facts when agents must cite specific docs
+- **Richer Trust Layer** — debate transcript provides audit trail
+
+#### Challenges
+
+- **Latency:** Multiple agent calls adds significant time
+- **Cost:** More LLM calls = higher API costs
+- **Complexity:** Orchestrating multi-agent systems is non-trivial
+- **Evaluation:** How do we measure if debate improves answer quality?
+
+#### Research Questions
+
+1. How many advocates is optimal? (1 per doc? groups of 3?)
+2. Should advocates know about other advocates' documents?
+3. How to handle unanimous agreement vs. split decisions?
+4. Can smaller models (GPT-4o-mini) be advocates while GPT-4o orchestrates?
+
+#### Related Work
+
+- "Debate" paper from Anthropic on AI safety through debate
+- Multi-agent systems in software engineering (AutoGen, CrewAI)
+- Mixture-of-Experts architectures
+
+#### Implementation Phases
+
+**Phase 1: Simple debate (2 advocates)**
+- Split documents into 2 groups
+- Each advocate summarizes their findings
+- Orchestrator picks winner or synthesizes
+
+**Phase 2: Full debate protocol**
+- Add cross-examination round
+- Implement rebuttal mechanism
+- Track debate transcript
+
+**Phase 3: Integration with Trust Layer**
+- Debate outcomes feed into confidence scoring
+- Conflicts identified in debate become gaps
+- Advocate agreement → higher confidence
+
+---
+
 ## Implementation Priority Matrix
 
 | Improvement | Impact | Effort | Priority |
@@ -494,6 +630,7 @@ Let the system decide when retrieval is needed and iterate autonomously.
 | Confidence calibration | Medium | High | P3 |
 | Full-text retrieval | Low | High | P4 |
 | Agentic RAG | Low | High | P4 |
+| Multi-agent debate | Experimental | High | Research |
 
 ---
 
