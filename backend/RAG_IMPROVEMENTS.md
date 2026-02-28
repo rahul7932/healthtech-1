@@ -843,11 +843,60 @@ GET https://clinicaltrials.gov/api/v2/studies?query.cond=heart+failure&query.int
 
 ---
 
-### 8.2 Other Potential Sources (Future)
+### 8.2 openFDA Integration
+**Priority: High | Effort: Low**
+
+**TODO:** Add FDA drug data via the openFDA API.
+
+The FDA provides free public APIs with drug labels, approval history, and adverse event data.
+
+**API Base:** `https://api.fda.gov`
+
+**Relevant Endpoints:**
+
+| Endpoint | Data | Use Case |
+|----------|------|----------|
+| `/drug/label` | Drug labels/prescribing info | Dosing, contraindications, black box warnings |
+| `/drug/drugsfda` | FDA approval history | Approval dates, applications |
+| `/drug/event` | Adverse events (FAERS) | Safety signals, side effects |
+
+**Example API Calls:**
+```bash
+# Drug label for metformin
+GET https://api.fda.gov/drug/label.json?search=openfda.generic_name:metformin&limit=5
+
+# FDA approval info
+GET https://api.fda.gov/drug/drugsfda.json?search=products.brand_name:lipitor&limit=5
+
+# Adverse events
+GET https://api.fda.gov/drug/event.json?search=patient.drug.openfda.generic_name:aspirin&limit=10
+```
+
+**Access:**
+- **No API key:** 1,000 requests/day
+- **With API key:** 120,000 requests/day (free registration at https://open.fda.gov/apis/authentication/)
+
+**New fields for Document model:**
+- `source`: "pubmed" | "clinicaltrials" | "fda"
+- `fda_application_number`: NDA/ANDA number
+- `document_type`: "label" | "approval" | "adverse_event"
+
+**Trust Layer enhancements:**
+- Gap detector can flag missing safety information from official labels
+- Confidence calculator can boost claims supported by FDA-approved labeling
+- Surface black box warnings when relevant to the query
+
+**Files to create/modify:**
+- `app/services/openfda.py` — New API client
+- `app/models/document.py` — Add FDA-specific fields
+
+---
+
+### 8.3 Other Potential Sources (Future)
 - **Cochrane Library** — Systematic reviews and meta-analyses
-- **FDA Drug Labels** — Official prescribing information
 - **UpToDate/DynaMed** — Clinical decision support (requires licensing)
 - **NICE/WHO Guidelines** — Treatment guidelines
+- **DrugBank** — Comprehensive drug database (requires licensing for full access)
 
 ---
 
@@ -858,6 +907,7 @@ GET https://clinicaltrials.gov/api/v2/studies?query.cond=heart+failure&query.int
 | Citation hallucination detection | High | Low | P0 |
 | Hybrid search (BM25 + vector) | High | Medium | P0 |
 | **ClinicalTrials.gov integration** | **High** | **Medium** | **P1** |
+| **openFDA integration** | **High** | **Low** | **P1** |
 | Cross-encoder re-ranking | High | Medium | P1 |
 | Query rewriting/expansion | High | Low | P1 |
 | NLI-based attribution | High | Medium | P1 |
