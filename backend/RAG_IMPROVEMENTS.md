@@ -59,24 +59,160 @@ Output: "metformin weight reduction obesity body mass index BMI antidiabetic"
 
 Bi-encoder (current) is fast but approximate. Cross-encoder re-ranking on top-K improves precision significantly.
 
-**Pipeline:**
+#### Understanding Bi-Encoders vs Cross-Encoders
+
+**Bi-Encoder (current approach):**
 ```
-Retriever (top 50) → Cross-Encoder Re-rank → Top 10 to Generator
+Query    → Embed independently → [vector A]  ─┐
+                                              ├─→ Cosine similarity → Score
+Document → Embed independently → [vector B]  ─┘
+```
+- Query and document are embedded **separately**
+- Fast because document embeddings are pre-computed at ingest time
+- Limitation: the model never "sees" query and document together, so it can miss nuanced relevance
+
+**Cross-Encoder:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│ [CLS] Query text here [SEP] Document text here [SEP]       │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+                    Transformer processes ALL tokens together
+                              ↓
+                    Relevance score: 0.92
+```
+- Query and document are processed **together** in a single forward pass
+- The model attends to both simultaneously, capturing fine-grained interactions
+- Much more accurate, but slow (can't pre-compute anything)
+- **Does NOT produce embeddings** — outputs a relevance score directly
+
+#### What are [CLS] and [SEP] tokens?
+
+These are special tokens used by BERT-style transformers:
+
+- **[CLS]** (Classification): Placed at the start. The model learns to encode the "meaning of the whole input" into this token's position. Used for classification tasks.
+- **[SEP]** (Separator): Marks boundaries between different text segments. Tells the model "here's where one piece ends and another begins."
+
+The cross-encoder feeds [CLS] vector into a classifier head that outputs a relevance score (0-1).
+
+#### Two-Stage Pipeline
+
+Cross-encoders are too slow to run on entire database. Solution: use both approaches.
+
+```
+STAGE 1: Bi-encoder (fast, approximate)
+─────────────────────────────────────────
+Query: "Do ACE inhibitors help heart failure?"
+    ↓
+OpenAI embed query → [0.2, -0.4, 0.8, ...]
+    ↓
+Compare to pre-embedded docs in pgvector
+    ↓
+Get top 50 candidates (~50ms)
+
+
+STAGE 2: Cross-encoder (slow, accurate)
+─────────────────────────────────────────
+For each of those 50 docs:
+    Feed raw text into cross-encoder model
+    Get relevance score
+    ↓
+Sort by cross-encoder score
+Return top 10 (~200ms)
 ```
 
-**Models to consider:**
-- `cross-encoder/ms-marco-MiniLM-L-12-v2` (general)
-- `pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb` (medical)
+#### Why This Matters for Medical RAG
 
-**Implementation:**
-- Add `Reranker` service using sentence-transformers
-- Run on retriever output before passing to generator
+Medical literature has extensive synonym issues that bi-encoders can miss:
+
+| Query Term | Document Term | Bi-Encoder | Cross-Encoder |
+|------------|---------------|------------|---------------|
+| heart attack | myocardial infarction | May miss | Understands |
+| high blood pressure | hypertension | Weak match | Strong match |
+| Advil | ibuprofen | May miss | Understands |
+| ACE inhibitors | angiotensin-converting enzyme inhibitors | Partial | Full match |
+
+Cross-encoders see both texts together and can reason about whether they discuss the same concept.
+
+#### Cost and Latency Trade-offs
+
+| Aspect | Bi-Encoder | Cross-Encoder |
+|--------|------------|---------------|
+| **API cost** | Paid (OpenAI) | Free (local model) |
+| **Latency** | ~50ms | +100-300ms |
+| **Hardware** | Minimal | CPU/GPU |
+| **Accuracy** | Good | Better |
+
+The cross-encoder runs locally (no API calls), so it adds latency but not cost.
+
+#### Comparison with Alternative Approaches
+
+| Era | Approach | Speed | Accuracy | Notes |
+|-----|----------|-------|----------|-------|
+| Current | Bi-encoder only | Fast | Good | Your current setup |
+| Recommended | Bi + Cross-encoder | Medium | Better | Proven production pattern |
+| 2020+ | ColBERT (late interaction) | Medium | Better | Stores multiple vectors per doc |
+| 2023+ | LLM reranker (GPT-4) | Slow | Best | Expensive (~$0.25/query) |
+
+The bi-encoder + cross-encoder pattern is like HTTPS: not bleeding edge, but proven, well-understood, and the right choice for most production systems.
+
+#### Models to Consider
+
+**General purpose:**
+- `cross-encoder/ms-marco-MiniLM-L-12-v2` — Fast, good quality
+- `cross-encoder/ms-marco-MiniLM-L-6-v2` — Faster, slightly lower quality
+
+**Medical/scientific:**
+- `pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb` — Trained on medical NLI
+- `cross-encoder/stsb-roberta-base` — Good for semantic similarity
+
+**MS MARCO** = Microsoft Machine Reading Comprehension — a dataset of millions of (query, document, relevance) examples from Bing search, used to train these models.
+
+#### Implementation
+
+```python
+from sentence_transformers import CrossEncoder
+
+class Reranker:
+    def __init__(self):
+        self.model = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-12-v2')
+    
+    def rerank(
+        self, 
+        query: str, 
+        documents: list[DocumentWithScore], 
+        top_k: int = 10
+    ) -> list[DocumentWithScore]:
+        """Re-rank documents using cross-encoder."""
+        
+        # Create (query, document) pairs
+        pairs = [(query, doc.abstract) for doc in documents]
+        
+        # Get cross-encoder scores
+        scores = self.model.predict(pairs)
+        
+        # Sort by score and return top_k
+        doc_scores = list(zip(documents, scores))
+        doc_scores.sort(key=lambda x: x[1], reverse=True)
+        
+        # Update relevance_score with cross-encoder score
+        reranked = []
+        for doc, score in doc_scores[:top_k]:
+            doc.relevance_score = float(score)
+            reranked.append(doc)
+        
+        return reranked
+```
 
 **Files to create:**
 - `app/services/reranker.py`
 
+**Files to modify:**
+- `app/api/routes.py` (call reranker after retriever)
+
 **Dependencies to add:**
 - `sentence-transformers`
+- `torch` (if not already installed)
 
 ---
 
