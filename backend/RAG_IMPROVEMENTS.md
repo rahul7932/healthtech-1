@@ -800,12 +800,64 @@ class DebateOrchestrator:
 
 ---
 
+## 8. Data Source Expansion
+
+### 8.1 ClinicalTrials.gov Integration
+**Priority: High | Effort: Medium**
+
+**TODO:** Add ClinicalTrials.gov data to the knowledge base.
+
+Currently we only ingest PubMed abstracts. Clinical trials data provides:
+- **Ongoing studies** — Evidence gaps could be addressed by active trials
+- **Study protocols** — Detailed methodology not in abstracts
+- **Results data** — Structured outcomes (primary/secondary endpoints)
+- **Population details** — Inclusion/exclusion criteria for patient matching
+
+**API Access:**
+- ClinicalTrials.gov provides a REST API: `https://clinicaltrials.gov/api/v2/`
+- No API key required (rate limited to ~10 requests/second)
+- Returns JSON with study metadata, eligibility, interventions, outcomes
+
+**Implementation:**
+```python
+# Example: Search for ACE inhibitor trials
+GET https://clinicaltrials.gov/api/v2/studies?query.cond=heart+failure&query.intr=ACE+inhibitor&pageSize=100
+```
+
+**New fields for Document model:**
+- `source`: "pubmed" | "clinicaltrials"
+- `nct_id`: ClinicalTrials.gov identifier (e.g., "NCT01234567")
+- `study_phase`: Phase 1/2/3/4
+- `enrollment`: Number of participants
+- `study_status`: Recruiting, Completed, etc.
+
+**Trust Layer enhancements:**
+- Gap detector can suggest relevant ongoing trials
+- Confidence calculator can weight by study phase/enrollment
+- Evidence map can distinguish published results vs. trial data
+
+**Files to create/modify:**
+- `app/services/clinicaltrials.py` — New API client
+- `app/models/document.py` — Add trial-specific fields
+- `app/services/trust/gap_detector.py` — Surface relevant trials
+
+---
+
+### 8.2 Other Potential Sources (Future)
+- **Cochrane Library** — Systematic reviews and meta-analyses
+- **FDA Drug Labels** — Official prescribing information
+- **UpToDate/DynaMed** — Clinical decision support (requires licensing)
+- **NICE/WHO Guidelines** — Treatment guidelines
+
+---
+
 ## Implementation Priority Matrix
 
 | Improvement | Impact | Effort | Priority |
 |-------------|--------|--------|----------|
 | Citation hallucination detection | High | Low | P0 |
 | Hybrid search (BM25 + vector) | High | Medium | P0 |
+| **ClinicalTrials.gov integration** | **High** | **Medium** | **P1** |
 | Cross-encoder re-ranking | High | Medium | P1 |
 | Query rewriting/expansion | High | Low | P1 |
 | NLI-based attribution | High | Medium | P1 |
