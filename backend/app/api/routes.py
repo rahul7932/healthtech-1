@@ -124,9 +124,28 @@ async def query(
     confidence_results, overall_confidence, evidence_summary = calculate_confidence(scored_claims)
     logger.info(f"Overall confidence: {overall_confidence:.2f}")
     
+    # Step 6b: Apply hallucination penalty to confidence
+    # If citations are hallucinated, we can't fully trust the answer
+    if citation_result.has_hallucinations:
+        hallucination_penalty = citation_result.hallucination_rate
+        original_confidence = overall_confidence
+        overall_confidence = overall_confidence * (1 - hallucination_penalty)
+        logger.info(
+            f"Applied hallucination penalty: {original_confidence:.2f} → {overall_confidence:.2f} "
+            f"({hallucination_penalty:.0%} of citations unverified)"
+        )
+    
     # Step 7: Detect evidence gaps
     gap_results, global_gaps = await detect_gaps(scored_claims, documents)
     logger.info(f"Detected {len(global_gaps)} global gaps")
+    
+    # Step 7b: Add hallucination warning to global gaps
+    if citation_result.has_hallucinations:
+        count = len(citation_result.hallucinated_pmids)
+        pmids_str = ", ".join(citation_result.hallucinated_pmids[:3])  # Show first 3
+        if count > 3:
+            pmids_str += f", ... (+{count - 3} more)"
+        global_gaps.insert(0, f"Warning: {count} citation(s) could not be verified (PMIDs: {pmids_str})")
     
     # Step 8: Build the TrustReport
     claims = []
