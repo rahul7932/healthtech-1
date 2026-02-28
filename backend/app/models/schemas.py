@@ -206,6 +206,12 @@ class TrustReport(BaseModel):
         default_factory=list,
         description="Evidence gaps that affect the answer as a whole"
     )
+    
+    # Hallucinated citations (PMIDs cited but not in retrieved docs)
+    hallucinated_citations: list[str] = Field(
+        default_factory=list,
+        description="PMIDs cited in the answer that were not in the retrieved documents"
+    )
 
 
 # =============================================================================

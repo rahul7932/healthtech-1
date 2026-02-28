@@ -40,6 +40,7 @@ from app.services.trust.claim_extractor import extract_claims
 from app.services.trust.attribution_scorer import score_claims
 from app.services.trust.confidence_calculator import calculate_confidence
 from app.services.trust.gap_detector import detect_gaps
+from app.services.trust.citation_verifier import verify_citations
 
 logger = logging.getLogger(__name__)
 
@@ -61,17 +62,18 @@ async def query(
     This runs the full pipeline:
     1. Retrieve relevant documents (pgvector similarity search)
     2. Generate answer with citations (GPT-4o)
-    3. Extract claims from answer
-    4. Score each claim against evidence
-    5. Calculate confidence
-    6. Detect evidence gaps
-    7. Return TrustReport
+    3. Verify citations (detect hallucinated PMIDs)
+    4. Extract claims from answer
+    5. Score each claim against evidence
+    6. Calculate confidence
+    7. Detect evidence gaps
+    8. Return TrustReport
     
     Example:
         POST /api/query
         {"question": "Do ACE inhibitors reduce mortality in heart failure?"}
         
-        Returns TrustReport with answer, claims, confidence, gaps
+        Returns TrustReport with answer, claims, confidence, gaps, hallucinated_citations
     """
     question = request.question
     top_k = request.top_k
@@ -103,23 +105,30 @@ async def query(
     answer = await generate_answer(question, documents)
     logger.info(f"Generated answer: {len(answer)} chars")
     
-    # Step 3: Extract claims from the answer
+    # Step 3: Verify citations (detect hallucinations)
+    citation_result = verify_citations(answer, documents)
+    if citation_result.has_hallucinations:
+        logger.warning(
+            f"Hallucinated citations detected: {citation_result.hallucinated_pmids}"
+        )
+    
+    # Step 4: Extract claims from the answer
     extracted_claims = await extract_claims(answer)
     logger.info(f"Extracted {len(extracted_claims)} claims")
     
-    # Step 4: Score claims against evidence
+    # Step 5: Score claims against evidence
     scored_claims = await score_claims(extracted_claims, documents)
     logger.info(f"Scored {len(scored_claims)} claims")
     
-    # Step 5: Calculate confidence
+    # Step 6: Calculate confidence
     confidence_results, overall_confidence, evidence_summary = calculate_confidence(scored_claims)
     logger.info(f"Overall confidence: {overall_confidence:.2f}")
     
-    # Step 6: Detect evidence gaps
+    # Step 7: Detect evidence gaps
     gap_results, global_gaps = await detect_gaps(scored_claims, documents)
     logger.info(f"Detected {len(global_gaps)} global gaps")
     
-    # Step 7: Build the TrustReport
+    # Step 8: Build the TrustReport
     claims = []
     for i, (scored_claim, conf_result, gap_result) in enumerate(
         zip(scored_claims, confidence_results, gap_results)
@@ -165,6 +174,7 @@ async def query(
         overall_confidence=overall_confidence,
         evidence_summary=evidence_summary,
         global_gaps=global_gaps,
+        hallucinated_citations=citation_result.hallucinated_pmids,
     )
     
     logger.info("TrustReport generated successfully")
