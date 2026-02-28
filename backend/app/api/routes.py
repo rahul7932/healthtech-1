@@ -36,6 +36,7 @@ from app.services.pubmed import fetch_pubmed_articles
 from app.services.embeddings import embed_all_documents
 from app.services.retriever import retrieve_documents
 from app.services.generator import generate_answer
+from app.services.query_expander import expand_query
 from app.services.trust.claim_extractor import extract_claims
 from app.services.trust.attribution_scorer import score_claims
 from app.services.trust.confidence_calculator import calculate_confidence
@@ -60,14 +61,15 @@ async def query(
     The main endpoint — ask a medical question, get a verified answer.
     
     This runs the full pipeline:
-    1. Retrieve relevant documents (pgvector similarity search)
-    2. Generate answer with citations (GPT-4o)
-    3. Verify citations (detect hallucinated PMIDs)
-    4. Extract claims from answer
-    5. Score each claim against evidence
-    6. Calculate confidence
-    7. Detect evidence gaps
-    8. Return TrustReport
+    1. Expand query with medical synonyms
+    2. Retrieve relevant documents (pgvector similarity search)
+    3. Generate answer with citations (GPT-4o)
+    4. Verify citations (detect hallucinated PMIDs)
+    5. Extract claims from answer
+    6. Score each claim against evidence
+    7. Calculate confidence
+    8. Detect evidence gaps
+    9. Return TrustReport
     
     Example:
         POST /api/query
@@ -80,8 +82,14 @@ async def query(
     
     logger.info(f"Processing query: '{question}'")
     
-    # Step 1: Retrieve relevant documents
-    documents = await retrieve_documents(question, db, top_k)
+    # Step 1: Expand query with medical synonyms
+    # This improves retrieval by bridging terminology gaps
+    # (e.g., "heart attack" → "myocardial infarction")
+    expanded_query = await expand_query(question)
+    logger.info(f"Expanded query: '{expanded_query[:80]}...'")
+    
+    # Step 2: Retrieve relevant documents using expanded query
+    documents = await retrieve_documents(expanded_query, db, top_k)
     
     if not documents:
         # No documents found — can't generate a proper answer
@@ -97,34 +105,37 @@ async def query(
                 "neutral": 0,
             },
             global_gaps=["No relevant documents in database"],
+            hallucinated_citations=[],
         )
     
     logger.info(f"Retrieved {len(documents)} documents")
     
-    # Step 2: Generate answer with citations
+    # Step 3: Generate answer with citations
+    # Note: We use the ORIGINAL question for generation (not expanded)
+    # The expansion is only for retrieval
     answer = await generate_answer(question, documents)
     logger.info(f"Generated answer: {len(answer)} chars")
     
-    # Step 3: Verify citations (detect hallucinations)
+    # Step 4: Verify citations (detect hallucinations)
     citation_result = verify_citations(answer, documents)
     if citation_result.has_hallucinations:
         logger.warning(
             f"Hallucinated citations detected: {citation_result.hallucinated_pmids}"
         )
     
-    # Step 4: Extract claims from the answer
+    # Step 5: Extract claims from the answer
     extracted_claims = await extract_claims(answer)
     logger.info(f"Extracted {len(extracted_claims)} claims")
     
-    # Step 5: Score claims against evidence
+    # Step 6: Score claims against evidence
     scored_claims = await score_claims(extracted_claims, documents)
     logger.info(f"Scored {len(scored_claims)} claims")
     
-    # Step 6: Calculate confidence
+    # Step 7: Calculate confidence
     confidence_results, overall_confidence, evidence_summary = calculate_confidence(scored_claims)
     logger.info(f"Overall confidence: {overall_confidence:.2f}")
     
-    # Step 6b: Apply hallucination penalty to confidence
+    # Step 7b: Apply hallucination penalty to confidence
     # If citations are hallucinated, we can't fully trust the answer
     if citation_result.has_hallucinations:
         hallucination_penalty = citation_result.hallucination_rate
@@ -135,11 +146,11 @@ async def query(
             f"({hallucination_penalty:.0%} of citations unverified)"
         )
     
-    # Step 7: Detect evidence gaps
+    # Step 8: Detect evidence gaps
     gap_results, global_gaps = await detect_gaps(scored_claims, documents)
     logger.info(f"Detected {len(global_gaps)} global gaps")
     
-    # Step 7b: Add hallucination warning to global gaps
+    # Step 8b: Add hallucination warning to global gaps
     if citation_result.has_hallucinations:
         count = len(citation_result.hallucinated_pmids)
         pmids_str = ", ".join(citation_result.hallucinated_pmids[:3])  # Show first 3
@@ -147,7 +158,7 @@ async def query(
             pmids_str += f", ... (+{count - 3} more)"
         global_gaps.insert(0, f"Warning: {count} citation(s) could not be verified (PMIDs: {pmids_str})")
     
-    # Step 8: Build the TrustReport
+    # Step 9: Build the TrustReport
     claims = []
     for i, (scored_claim, conf_result, gap_result) in enumerate(
         zip(scored_claims, confidence_results, gap_results)
