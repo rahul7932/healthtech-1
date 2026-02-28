@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     # Maximum documents to fetch from PubMed when live_fetch is triggered
     live_fetch_max_results: int = 50
 
+    # Agentic Debate
+    # When enabled, uses multi-agent debate for answer generation instead of single-pass
+    # Debate: multiple advocates argue for their documents, then synthesizer combines
+    use_agentic_debate: bool = False
+    
+    # Number of advocate agents in the debate (each gets a subset of documents)
+    # More advocates = more perspectives but higher latency/cost
+    debate_num_advocates: int = 2
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

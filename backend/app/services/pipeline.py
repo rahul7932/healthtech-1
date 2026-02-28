@@ -13,9 +13,14 @@ WHY THIS EXISTS:
 
 PIPELINE STAGES:
 1. Retrieval: Expand query → Retrieve docs → (optional) Live fetch from PubMed
-2. Generation: Generate answer with citations
+2. Generation: Generate answer with citations (standard or agentic debate)
 3. Trust Layer: Verify citations → Extract claims → Score → Confidence → Gaps
 4. Assembly: Build the TrustReport
+
+GENERATION MODES:
+- Standard: Single-pass GPT-4o generation (default)
+- Agentic Debate: Multiple advocates argue for documents, synthesizer combines
+  Enable via USE_AGENTIC_DEBATE=true in config
 
 USAGE:
     pipeline = QueryPipeline(db)
@@ -33,6 +38,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.models.schemas import (
     TrustReport,
     Claim,
@@ -56,6 +62,9 @@ from app.services.trust.attribution_scorer import score_claims, ScoredClaim
 from app.services.trust.confidence_calculator import calculate_confidence
 from app.services.trust.gap_detector import detect_gaps
 
+# Agentic Debate (lazy import to avoid circular dependencies)
+from app.services.debate import run_debate, DebateResult
+
 logger = logging.getLogger(__name__)
 
 
@@ -77,6 +86,7 @@ class PipelineResult:
     
     # Generation stage
     answer: str = ""
+    debate_result: Optional[DebateResult] = None  # Only set if debate mode is used
     
     # Trust layer stage
     citation_result: VerificationResult = None
@@ -239,9 +249,35 @@ class QueryPipeline:
     # =========================================================================
     
     async def _stage_generation(self, result: PipelineResult) -> None:
-        """Generate an answer with citations using the retrieved documents."""
-        result.answer = await generate_answer(result.question, result.documents)
-        logger.info(f"Generated answer: {len(result.answer)} chars")
+        """
+        Generate an answer with citations.
+        
+        Uses either standard generation or agentic debate based on config.
+        The debate system runs multiple advocates then synthesizes their arguments.
+        """
+        settings = get_settings()
+        
+        if settings.use_agentic_debate:
+            # Agentic debate: multiple advocates argue, synthesizer combines
+            logger.info(
+                f"Using agentic debate with {settings.debate_num_advocates} advocates"
+            )
+            debate_result = await run_debate(
+                query=result.question,
+                documents=result.documents,
+                num_advocates=settings.debate_num_advocates,
+            )
+            result.answer = debate_result.answer
+            result.debate_result = debate_result
+            logger.info(
+                f"Debate complete: {debate_result.num_advocates} advocates, "
+                f"avg confidence {debate_result.average_confidence:.2f}, "
+                f"answer {len(result.answer)} chars"
+            )
+        else:
+            # Standard single-pass generation
+            result.answer = await generate_answer(result.question, result.documents)
+            logger.info(f"Generated answer: {len(result.answer)} chars")
     
     # =========================================================================
     # STAGE 3: TRUST LAYER
