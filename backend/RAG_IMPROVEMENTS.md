@@ -323,24 +323,212 @@ Instead of inline `[PMID:xxx]`, have the model output structured JSON with claim
 ### 3.1 NLI-Based Attribution Verification
 **Priority: High | Effort: Medium**
 
-Add dedicated Natural Language Inference model for entailment detection.
+Add a dedicated Natural Language Inference (NLI) model to verify that documents actually support the claims that cite them.
 
-**Models:**
-- `microsoft/deberta-v3-large-mnli`
-- `MoritzLaworski/mDeBERTa-v3-base-mnli-xnli` (multilingual)
+#### What is NLI?
 
-**Pipeline:**
+Natural Language Inference is a classification task where a model determines the relationship between two texts:
+
+- **Premise**: The source text (in our case, the document abstract)
+- **Hypothesis**: The statement to verify (in our case, a claim)
+
+The model outputs one of three labels:
+- **Entailment**: The premise supports/implies the hypothesis
+- **Contradiction**: The premise contradicts the hypothesis
+- **Neutral**: No clear logical relationship
+
+#### Why Use NLI Instead of GPT?
+
+| Approach | Speed | Cost | Accuracy | Runs Locally |
+|----------|-------|------|----------|--------------|
+| GPT-4o-mini (current) | ~500ms | ~$0.001/pair | Good | No |
+| NLI model (proposed) | ~50ms | Free | Good for this task | Yes |
+
+NLI models are **trained specifically for this task** on millions of premise-hypothesis pairs. They're faster, cheaper, and don't require API calls.
+
+#### How It Works
+
 ```
-For each (claim, cited_document):
-    entailment_score = NLI(premise=document, hypothesis=claim)
-    # Output: entailment / contradiction / neutral
+Premise (document):
+"Our randomized controlled trial of 5,000 patients showed that ACE inhibitors 
+reduced all-cause mortality by 23% compared to placebo (p<0.001)."
+
+Hypothesis (claim):
+"ACE inhibitors reduce mortality"
+
+                    ↓
+              NLI Model
+                    ↓
+              
+Output: ENTAILMENT (confidence: 0.94)
 ```
 
-**Files to modify:**
-- `app/services/trust/attribution_scorer.py`
+Another example showing contradiction detection:
 
-**Dependencies to add:**
-- `transformers`
+```
+Premise (document):
+"Our study found no significant difference in mortality between ACE inhibitor 
+and placebo groups (HR 0.98, 95% CI 0.87-1.10)."
+
+Hypothesis (claim):
+"ACE inhibitors significantly reduce mortality"
+
+                    ↓
+              NLI Model
+                    ↓
+              
+Output: CONTRADICTION (confidence: 0.89)
+```
+
+#### Models to Consider
+
+**General NLI models:**
+- `microsoft/deberta-v3-large-mnli` — Best accuracy, larger (400M params)
+- `microsoft/deberta-v3-base-mnli` — Good balance of speed/accuracy
+- `facebook/bart-large-mnli` — Fast, good for zero-shot
+
+**Medical/Scientific NLI models:**
+- `microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract` — Trained on PubMed
+- `pritamdeka/BioBERT-mnli-snli-scinli-scitail-mednli-stsb` — Medical NLI
+- `allenai/scibert_scivocab_uncased` — Scientific text
+
+#### Training Data Behind These Models
+
+NLI models are trained on datasets like:
+- **MNLI** (Multi-Genre NLI): 433K sentence pairs across genres
+- **SNLI** (Stanford NLI): 570K human-written pairs
+- **MedNLI**: 14K clinical sentence pairs from MIMIC-III
+- **SciTail**: Science exam entailment dataset
+
+#### Integration with Current Attribution Scorer
+
+Current flow:
+```
+Claims + Documents → GPT-4o-mini evaluates each pair → supports/contradicts/neutral
+```
+
+Proposed flow:
+```
+Claims + Documents → NLI model evaluates each pair → entailment/contradiction/neutral
+                            ↓
+                  (Optional) GPT-4o-mini for edge cases only
+```
+
+#### Implementation
+
+```python
+from transformers import pipeline
+
+class NLIVerifier:
+    """
+    Verifies claim-document attribution using Natural Language Inference.
+    """
+    
+    def __init__(self, model_name: str = "microsoft/deberta-v3-base-mnli"):
+        self.nli = pipeline(
+            "zero-shot-classification",
+            model=model_name,
+            device=0 if torch.cuda.is_available() else -1  # GPU if available
+        )
+    
+    def verify(self, claim: str, document: str) -> dict:
+        """
+        Check if document supports the claim.
+        
+        Returns:
+            {
+                "label": "entailment" | "contradiction" | "neutral",
+                "confidence": 0.94,
+                "scores": {"entailment": 0.94, "contradiction": 0.03, "neutral": 0.03}
+            }
+        """
+        # Truncate document if too long (model max ~512 tokens)
+        doc_truncated = document[:2000]
+        
+        result = self.nli(
+            doc_truncated,
+            candidate_labels=["entailment", "contradiction", "neutral"],
+            hypothesis=claim
+        )
+        
+        return {
+            "label": result["labels"][0],
+            "confidence": result["scores"][0],
+            "scores": dict(zip(result["labels"], result["scores"]))
+        }
+    
+    def verify_batch(self, pairs: list[tuple[str, str]]) -> list[dict]:
+        """Verify multiple claim-document pairs efficiently."""
+        return [self.verify(claim, doc) for claim, doc in pairs]
+
+
+# Usage in AttributionScorer
+async def score_with_nli(claims, documents):
+    verifier = NLIVerifier()
+    
+    for claim in claims:
+        for doc in documents:
+            result = verifier.verify(claim.text, doc.abstract)
+            
+            if result["label"] == "entailment" and result["confidence"] > 0.7:
+                claim.supporting_docs.append(doc)
+            elif result["label"] == "contradiction" and result["confidence"] > 0.7:
+                claim.contradicting_docs.append(doc)
+            else:
+                claim.neutral_docs.append(doc)
+```
+
+#### Confidence Thresholds
+
+Recommended thresholds for medical claims (conservative):
+- **Entailment**: confidence > 0.8 to mark as "supporting"
+- **Contradiction**: confidence > 0.8 to mark as "contradicting"
+- **Otherwise**: mark as "neutral" (when in doubt, don't make strong claims)
+
+#### Hybrid Approach
+
+For best results, combine NLI with LLM:
+
+```
+Step 1: NLI model scores all claim-document pairs (fast, cheap)
+            ↓
+Step 2: For pairs with confidence < 0.7 (uncertain), use GPT-4o-mini
+            ↓
+Step 3: Return final attribution scores
+```
+
+This gives you:
+- Speed of NLI for clear cases
+- Reasoning ability of LLM for ambiguous cases
+- Lower cost overall
+
+#### Benefits for Medical RAG
+
+1. **Catches "citation bluffing"**: When LLM cites a document that doesn't actually support the claim
+2. **Detects contradictions**: Important when studies disagree
+3. **Faster iteration**: Can re-verify without API rate limits
+4. **Audit trail**: Deterministic scores for the same input
+
+#### Challenges
+
+- **Context length**: NLI models typically handle ~512 tokens, may need to truncate abstracts
+- **Domain shift**: General NLI models may underperform on medical text
+- **Nuance**: NLI is binary-ish, may miss degrees of support
+- **GPU recommended**: CPU inference is slow for large models
+
+#### Files to Modify
+
+- `app/services/trust/attribution_scorer.py` — Add NLI verification
+- `app/services/trust/nli_verifier.py` — New service file
+
+#### Dependencies to Add
+
+```
+transformers>=4.30.0
+torch>=2.0.0
+```
+
+Note: `torch` is large (~2GB). Consider using `onnxruntime` for smaller deployments.
 
 ---
 

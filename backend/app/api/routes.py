@@ -37,6 +37,8 @@ from app.services.embeddings import embed_all_documents
 from app.services.retriever import retrieve_documents
 from app.services.generator import generate_answer
 from app.services.query_expander import expand_query
+from app.services.coverage_checker import check_coverage
+from app.services.pubmed_query_generator import generate_pubmed_query
 from app.services.trust.claim_extractor import extract_claims
 from app.services.trust.attribution_scorer import score_claims
 from app.services.trust.confidence_calculator import calculate_confidence
@@ -63,24 +65,34 @@ async def query(
     This runs the full pipeline:
     1. Expand query with medical synonyms
     2. Retrieve relevant documents (pgvector similarity search)
-    3. Generate answer with citations (GPT-4o)
-    4. Verify citations (detect hallucinated PMIDs)
-    5. Extract claims from answer
-    6. Score each claim against evidence
-    7. Calculate confidence
-    8. Detect evidence gaps
-    9. Return TrustReport
+    3. [Optional] If live_fetch=true and coverage is low, fetch from PubMed
+    4. Generate answer with citations (GPT-4o)
+    5. Verify citations (detect hallucinated PMIDs)
+    6. Extract claims from answer
+    7. Score each claim against evidence
+    8. Calculate confidence
+    9. Detect evidence gaps
+    10. Return TrustReport
     
     Example:
         POST /api/query
         {"question": "Do ACE inhibitors reduce mortality in heart failure?"}
         
-        Returns TrustReport with answer, claims, confidence, gaps, hallucinated_citations
+    With live fetch (fetches from PubMed if coverage is low):
+        {"question": "...", "live_fetch": true, "max_fetch": 50}
+        
+    Returns TrustReport with answer, claims, confidence, gaps, hallucinated_citations
     """
     question = request.question
     top_k = request.top_k
+    live_fetch = request.live_fetch
+    max_fetch = request.max_fetch
     
-    logger.info(f"Processing query: '{question}'")
+    # Track if we fetched new documents
+    fetch_triggered = False
+    documents_fetched = 0
+    
+    logger.info(f"Processing query: '{question}' (live_fetch={live_fetch})")
     
     # Step 1: Expand query with medical synonyms
     # This improves retrieval by bridging terminology gaps
@@ -91,11 +103,62 @@ async def query(
     # Step 2: Retrieve relevant documents using expanded query
     documents = await retrieve_documents(expanded_query, db, top_k)
     
+    # Step 2b: Check coverage and optionally fetch from PubMed
+    if live_fetch:
+        coverage = check_coverage(documents)
+        logger.info(f"Coverage check: {coverage.reason}")
+        
+        if not coverage.is_sufficient:
+            logger.info(f"Low coverage detected, fetching from PubMed...")
+            fetch_triggered = True
+            
+            # Generate optimized PubMed search query
+            pubmed_query = await generate_pubmed_query(question)
+            logger.info(f"PubMed search query: '{pubmed_query}'")
+            
+            # Fetch articles from PubMed
+            articles = await fetch_pubmed_articles(pubmed_query, max_fetch)
+            logger.info(f"Fetched {len(articles)} articles from PubMed")
+            
+            if articles:
+                # Save new articles to database (skip duplicates)
+                new_count = 0
+                for article in articles:
+                    existing = await db.execute(
+                        select(Document).where(Document.pmid == article["pmid"])
+                    )
+                    if existing.scalar_one_or_none():
+                        continue
+                    
+                    doc = Document(
+                        pmid=article["pmid"],
+                        title=article["title"],
+                        abstract=article["abstract"],
+                        authors=article.get("authors"),
+                        publication_date=article.get("publication_date"),
+                        journal=article.get("journal"),
+                    )
+                    db.add(doc)
+                    new_count += 1
+                
+                await db.commit()
+                documents_fetched = new_count
+                logger.info(f"Saved {new_count} new documents to database")
+                
+                # Generate embeddings for new documents
+                if new_count > 0:
+                    embedded = await embed_all_documents(db)
+                    logger.info(f"Embedded {embedded} new documents")
+                
+                # Re-retrieve with the new documents included
+                documents = await retrieve_documents(expanded_query, db, top_k)
+                logger.info(f"Re-retrieved {len(documents)} documents after fetch")
+    
     if not documents:
         # No documents found — can't generate a proper answer
         return TrustReport(
             query=question,
-            answer="I cannot answer this question because no relevant documents were found in the database. Please ingest relevant medical literature first.",
+            answer="I cannot answer this question because no relevant documents were found in the database. Try enabling live_fetch to retrieve documents from PubMed.",
             claims=[],
             overall_confidence=0.0,
             evidence_summary={
@@ -106,6 +169,8 @@ async def query(
             },
             global_gaps=["No relevant documents in database"],
             hallucinated_citations=[],
+            fetch_triggered=fetch_triggered,
+            documents_fetched=documents_fetched,
         )
     
     logger.info(f"Retrieved {len(documents)} documents")
@@ -205,9 +270,11 @@ async def query(
         evidence_summary=evidence_summary,
         global_gaps=global_gaps,
         hallucinated_citations=citation_result.hallucinated_pmids,
+        fetch_triggered=fetch_triggered,
+        documents_fetched=documents_fetched,
     )
     
-    logger.info("TrustReport generated successfully")
+    logger.info(f"TrustReport generated successfully (fetch_triggered={fetch_triggered}, docs_fetched={documents_fetched})")
     return trust_report
 
 

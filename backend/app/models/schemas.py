@@ -212,6 +212,16 @@ class TrustReport(BaseModel):
         default_factory=list,
         description="PMIDs cited in the answer that were not in the retrieved documents"
     )
+    
+    # Live fetch information (when live_fetch was enabled)
+    fetch_triggered: bool = Field(
+        default=False,
+        description="Whether PubMed fetch was triggered due to low coverage"
+    )
+    documents_fetched: int = Field(
+        default=0,
+        description="Number of new documents fetched from PubMed (0 if fetch not triggered)"
+    )
 
 
 # =============================================================================
@@ -234,6 +244,9 @@ class QueryRequest(BaseModel):
     Example:
         POST /api/query
         {"question": "Do ACE inhibitors reduce mortality in heart failure?"}
+        
+    With live fetch (fetches from PubMed if coverage is low):
+        {"question": "...", "live_fetch": true, "max_fetch": 50}
     """
     question: str = Field(
         min_length=10,
@@ -243,6 +256,15 @@ class QueryRequest(BaseModel):
         default=10,
         ge=1, le=50,
         description="Number of documents to retrieve"
+    )
+    live_fetch: bool = Field(
+        default=False,
+        description="If true, fetch from PubMed when document coverage is insufficient"
+    )
+    max_fetch: int = Field(
+        default=50,
+        ge=10, le=200,
+        description="Maximum documents to fetch from PubMed (only used when live_fetch=true)"
     )
 
 

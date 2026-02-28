@@ -21,6 +21,14 @@ class Settings(BaseSettings):
     # 1.0 = pure semantic, 0.0 = pure keyword, 0.7 = 70% semantic + 30% keyword
     hybrid_search_alpha: float = 0.7
 
+    # Live PubMed Fetch
+    # Coverage threshold: minimum average relevance score to consider coverage sufficient
+    # If below this, live_fetch will trigger PubMed retrieval
+    coverage_threshold: float = 0.6
+    
+    # Maximum documents to fetch from PubMed when live_fetch is triggered
+    live_fetch_max_results: int = 50
+
     model_config = SettingsConfigDict(env_file=".env")
 
 
