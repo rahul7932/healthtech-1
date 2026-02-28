@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # PubMed (optional - increases rate limit)
     pubmed_api_key: str = ""
 
+    # Hybrid Search
+    # Balance between semantic (vector) and keyword (full-text) search
+    # 1.0 = pure semantic, 0.0 = pure keyword, 0.7 = 70% semantic + 30% keyword
+    hybrid_search_alpha: float = 0.7
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

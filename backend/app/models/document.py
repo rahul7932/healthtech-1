@@ -10,6 +10,7 @@ from typing import Optional
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import String, Text, Date, DateTime, ARRAY
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -41,10 +42,15 @@ class Document(Base):
     publication_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     journal: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     
-    # Vector embedding for similarity search
+    # Vector embedding for semantic similarity search
     # 1536 dimensions = OpenAI text-embedding-3-small output size
     # This is what powers the "find similar documents" functionality
     embedding: Mapped[Optional[list[float]]] = mapped_column(Vector(1536), nullable=True)
+    
+    # Full-text search vector for keyword search (hybrid search)
+    # Populated via database trigger on insert/update
+    # Contains stemmed tokens from title + abstract
+    search_vector = mapped_column(TSVECTOR, nullable=True)
     
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
