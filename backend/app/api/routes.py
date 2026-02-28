@@ -1,49 +1,34 @@
 """
-API Routes — The endpoints that tie everything together.
+API Routes — Thin HTTP layer over the services.
 
 ENDPOINTS:
-- POST /api/query         → Main endpoint: question → TrustReport
+- POST /api/query            → Main endpoint: question → TrustReport
 - POST /api/documents/ingest → Populate database from PubMed
 - GET  /api/documents/{pmid} → Get single document details
 - GET  /api/documents/count  → Check how many docs are embedded
 
-FLOW:
-1. First, call /api/documents/ingest to populate the database
-2. Then, call /api/query with your medical question
-3. Get back a TrustReport with answer, claims, confidence, and gaps
+The heavy lifting is done by services (especially QueryPipeline).
+Routes handle HTTP concerns: validation, dependencies, responses.
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.document import Document
 from app.models.schemas import (
     QueryRequest,
     IngestRequest,
     TrustReport,
-    Claim,
-    EvidenceReference,
     DocumentResponse,
 )
 
 # Services
+from app.services.pipeline import QueryPipeline
 from app.services.pubmed import fetch_pubmed_articles
 from app.services.embeddings import embed_all_documents
-from app.services.retriever import retrieve_documents
-from app.services.generator import generate_answer
-from app.services.query_expander import expand_query
-from app.services.coverage_checker import check_coverage
-from app.services.pubmed_query_generator import generate_pubmed_query
-from app.services.trust.claim_extractor import extract_claims
-from app.services.trust.attribution_scorer import score_claims
-from app.services.trust.confidence_calculator import calculate_confidence
-from app.services.trust.gap_detector import detect_gaps
-from app.services.trust.citation_verifier import verify_citations
+from app.services.document_service import DocumentService
 
 logger = logging.getLogger(__name__)
 
@@ -60,222 +45,31 @@ async def query(
     db: AsyncSession = Depends(get_db),
 ) -> TrustReport:
     """
-    The main endpoint — ask a medical question, get a verified answer.
+    Ask a medical question, get a verified answer with trust metrics.
     
-    This runs the full pipeline:
+    The full pipeline:
     1. Expand query with medical synonyms
-    2. Retrieve relevant documents (pgvector similarity search)
-    3. [Optional] If live_fetch=true and coverage is low, fetch from PubMed
-    4. Generate answer with citations (GPT-4o)
-    5. Verify citations (detect hallucinated PMIDs)
-    6. Extract claims from answer
-    7. Score each claim against evidence
-    8. Calculate confidence
-    9. Detect evidence gaps
-    10. Return TrustReport
+    2. Retrieve relevant documents (hybrid search)
+    3. [Optional] Fetch from PubMed if coverage is low
+    4. Generate answer with citations
+    5. Run Trust Layer (verify, extract, score, confidence, gaps)
+    6. Return TrustReport
     
     Example:
         POST /api/query
         {"question": "Do ACE inhibitors reduce mortality in heart failure?"}
         
-    With live fetch (fetches from PubMed if coverage is low):
+    With live fetch:
         {"question": "...", "live_fetch": true, "max_fetch": 50}
-        
-    Returns TrustReport with answer, claims, confidence, gaps, hallucinated_citations
     """
-    question = request.question
-    top_k = request.top_k
-    live_fetch = request.live_fetch
-    max_fetch = request.max_fetch
+    pipeline = QueryPipeline(db)
     
-    # Track if we fetched new documents
-    fetch_triggered = False
-    documents_fetched = 0
-    
-    logger.info(f"Processing query: '{question}' (live_fetch={live_fetch})")
-    
-    # Step 1: Expand query with medical synonyms
-    # This improves retrieval by bridging terminology gaps
-    # (e.g., "heart attack" → "myocardial infarction")
-    expanded_query = await expand_query(question)
-    logger.info(f"Expanded query: '{expanded_query[:80]}...'")
-    
-    # Step 2: Retrieve relevant documents using expanded query
-    documents = await retrieve_documents(expanded_query, db, top_k)
-    
-    # Step 2b: Check coverage and optionally fetch from PubMed
-    if live_fetch:
-        coverage = check_coverage(documents)
-        logger.info(f"Coverage check: {coverage.reason}")
-        
-        if not coverage.is_sufficient:
-            logger.info(f"Low coverage detected, fetching from PubMed...")
-            fetch_triggered = True
-            
-            # Generate optimized PubMed search query
-            pubmed_query = await generate_pubmed_query(question)
-            logger.info(f"PubMed search query: '{pubmed_query}'")
-            
-            # Fetch articles from PubMed
-            articles = await fetch_pubmed_articles(pubmed_query, max_fetch)
-            logger.info(f"Fetched {len(articles)} articles from PubMed")
-            
-            if articles:
-                # Save new articles to database (skip duplicates)
-                new_count = 0
-                for article in articles:
-                    existing = await db.execute(
-                        select(Document).where(Document.pmid == article["pmid"])
-                    )
-                    if existing.scalar_one_or_none():
-                        continue
-                    
-                    doc = Document(
-                        pmid=article["pmid"],
-                        title=article["title"],
-                        abstract=article["abstract"],
-                        authors=article.get("authors"),
-                        publication_date=article.get("publication_date"),
-                        journal=article.get("journal"),
-                    )
-                    db.add(doc)
-                    new_count += 1
-                
-                await db.commit()
-                documents_fetched = new_count
-                logger.info(f"Saved {new_count} new documents to database")
-                
-                # Generate embeddings for new documents
-                if new_count > 0:
-                    embedded = await embed_all_documents(db)
-                    logger.info(f"Embedded {embedded} new documents")
-                
-                # Re-retrieve with the new documents included
-                documents = await retrieve_documents(expanded_query, db, top_k)
-                logger.info(f"Re-retrieved {len(documents)} documents after fetch")
-    
-    if not documents:
-        # No documents found — can't generate a proper answer
-        return TrustReport(
-            query=question,
-            answer="I cannot answer this question because no relevant documents were found in the database. Try enabling live_fetch to retrieve documents from PubMed.",
-            claims=[],
-            overall_confidence=0.0,
-            evidence_summary={
-                "total_sources": 0,
-                "supporting": 0,
-                "contradicting": 0,
-                "neutral": 0,
-            },
-            global_gaps=["No relevant documents in database"],
-            hallucinated_citations=[],
-            fetch_triggered=fetch_triggered,
-            documents_fetched=documents_fetched,
-        )
-    
-    logger.info(f"Retrieved {len(documents)} documents")
-    
-    # Step 3: Generate answer with citations
-    # Note: We use the ORIGINAL question for generation (not expanded)
-    # The expansion is only for retrieval
-    answer = await generate_answer(question, documents)
-    logger.info(f"Generated answer: {len(answer)} chars")
-    
-    # Step 4: Verify citations (detect hallucinations)
-    citation_result = verify_citations(answer, documents)
-    if citation_result.has_hallucinations:
-        logger.warning(
-            f"Hallucinated citations detected: {citation_result.hallucinated_pmids}"
-        )
-    
-    # Step 5: Extract claims from the answer
-    extracted_claims = await extract_claims(answer)
-    logger.info(f"Extracted {len(extracted_claims)} claims")
-    
-    # Step 6: Score claims against evidence
-    scored_claims = await score_claims(extracted_claims, documents)
-    logger.info(f"Scored {len(scored_claims)} claims")
-    
-    # Step 7: Calculate confidence
-    confidence_results, overall_confidence, evidence_summary = calculate_confidence(scored_claims)
-    logger.info(f"Overall confidence: {overall_confidence:.2f}")
-    
-    # Step 7b: Apply hallucination penalty to confidence
-    # If citations are hallucinated, we can't fully trust the answer
-    if citation_result.has_hallucinations:
-        hallucination_penalty = citation_result.hallucination_rate
-        original_confidence = overall_confidence
-        overall_confidence = overall_confidence * (1 - hallucination_penalty)
-        logger.info(
-            f"Applied hallucination penalty: {original_confidence:.2f} → {overall_confidence:.2f} "
-            f"({hallucination_penalty:.0%} of citations unverified)"
-        )
-    
-    # Step 8: Detect evidence gaps
-    gap_results, global_gaps = await detect_gaps(scored_claims, documents)
-    logger.info(f"Detected {len(global_gaps)} global gaps")
-    
-    # Step 8b: Add hallucination warning to global gaps
-    if citation_result.has_hallucinations:
-        count = len(citation_result.hallucinated_pmids)
-        pmids_str = ", ".join(citation_result.hallucinated_pmids[:3])  # Show first 3
-        if count > 3:
-            pmids_str += f", ... (+{count - 3} more)"
-        global_gaps.insert(0, f"Warning: {count} citation(s) could not be verified (PMIDs: {pmids_str})")
-    
-    # Step 9: Build the TrustReport
-    claims = []
-    for i, (scored_claim, conf_result, gap_result) in enumerate(
-        zip(scored_claims, confidence_results, gap_results)
-    ):
-        claim = Claim(
-            id=f"claim_{i + 1}",
-            text=scored_claim.claim.text,
-            span_start=scored_claim.claim.span_start,
-            span_end=scored_claim.claim.span_end,
-            supporting_docs=[
-                EvidenceReference(
-                    pmid=doc.pmid,
-                    title=doc.title,
-                    relevance_score=doc.relevance_score,
-                )
-                for doc in scored_claim.supporting_docs
-            ],
-            contradicting_docs=[
-                EvidenceReference(
-                    pmid=doc.pmid,
-                    title=doc.title,
-                    relevance_score=doc.relevance_score,
-                )
-                for doc in scored_claim.contradicting_docs
-            ],
-            neutral_docs=[
-                EvidenceReference(
-                    pmid=doc.pmid,
-                    title=doc.title,
-                    relevance_score=doc.relevance_score,
-                )
-                for doc in scored_claim.neutral_docs
-            ],
-            confidence=conf_result.confidence,
-            missing_evidence=gap_result.gaps,
-        )
-        claims.append(claim)
-    
-    trust_report = TrustReport(
-        query=question,
-        answer=answer,
-        claims=claims,
-        overall_confidence=overall_confidence,
-        evidence_summary=evidence_summary,
-        global_gaps=global_gaps,
-        hallucinated_citations=citation_result.hallucinated_pmids,
-        fetch_triggered=fetch_triggered,
-        documents_fetched=documents_fetched,
+    return await pipeline.run(
+        question=request.question,
+        top_k=request.top_k,
+        live_fetch=request.live_fetch,
+        max_fetch=request.max_fetch,
     )
-    
-    logger.info(f"TrustReport generated successfully (fetch_triggered={fetch_triggered}, docs_fetched={documents_fetched})")
-    return trust_report
 
 
 # =============================================================================
@@ -290,12 +84,9 @@ async def ingest_documents(
     """
     Ingest documents from PubMed into the database.
     
-    This endpoint:
     1. Searches PubMed for articles matching the search term
-    2. Saves them to the database
+    2. Saves them to the database (skips duplicates)
     3. Generates embeddings for all new documents
-    
-    Run this BEFORE querying to populate the database.
     
     Example:
         POST /api/documents/ingest
@@ -303,44 +94,20 @@ async def ingest_documents(
         
         Returns {"fetched": 100, "saved": 85, "embedded": 85}
     """
-    search_term = request.search_term
-    max_results = request.max_results
+    logger.info(f"Ingesting documents for: '{request.search_term}' (max {request.max_results})")
     
-    logger.info(f"Ingesting documents for: '{search_term}' (max {max_results})")
-    
-    # Step 1: Fetch from PubMed
-    articles = await fetch_pubmed_articles(search_term, max_results)
+    # Fetch from PubMed
+    articles = await fetch_pubmed_articles(request.search_term, request.max_results)
     logger.info(f"Fetched {len(articles)} articles from PubMed")
     
     if not articles:
         return {"fetched": 0, "saved": 0, "embedded": 0}
     
-    # Step 2: Save to database (skip duplicates)
-    saved_count = 0
-    for article in articles:
-        # Check if already exists
-        existing = await db.execute(
-            select(Document).where(Document.pmid == article["pmid"])
-        )
-        if existing.scalar_one_or_none():
-            continue
-        
-        # Create new document
-        doc = Document(
-            pmid=article["pmid"],
-            title=article["title"],
-            abstract=article["abstract"],
-            authors=article.get("authors"),
-            publication_date=article.get("publication_date"),
-            journal=article.get("journal"),
-        )
-        db.add(doc)
-        saved_count += 1
+    # Save to database
+    doc_service = DocumentService(db)
+    saved_count = await doc_service.save_articles(articles)
     
-    await db.commit()
-    logger.info(f"Saved {saved_count} new documents")
-    
-    # Step 3: Generate embeddings for all unembedded documents
+    # Generate embeddings
     embedded_count = await embed_all_documents(db)
     logger.info(f"Embedded {embedded_count} documents")
     
@@ -369,21 +136,8 @@ async def count_documents(
         GET /api/documents/count
         Returns {"total": 100, "embedded": 95, "pending": 5}
     """
-    # Total documents
-    total_result = await db.execute(select(func.count(Document.id)))
-    total = total_result.scalar()
-    
-    # Documents with embeddings
-    embedded_result = await db.execute(
-        select(func.count(Document.id)).where(Document.embedding.isnot(None))
-    )
-    embedded = embedded_result.scalar()
-    
-    return {
-        "total": total,
-        "embedded": embedded,
-        "pending": total - embedded,
-    }
+    doc_service = DocumentService(db)
+    return await doc_service.count()
 
 
 @router.get("/documents/{pmid}", response_model=DocumentResponse)
@@ -397,10 +151,8 @@ async def get_document(
     Example:
         GET /api/documents/12345678
     """
-    result = await db.execute(
-        select(Document).where(Document.pmid == pmid)
-    )
-    doc = result.scalar_one_or_none()
+    doc_service = DocumentService(db)
+    doc = await doc_service.get_by_pmid(pmid)
     
     if not doc:
         raise HTTPException(status_code=404, detail=f"Document {pmid} not found")
