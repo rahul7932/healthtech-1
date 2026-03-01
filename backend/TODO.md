@@ -798,6 +798,21 @@ class DebateOrchestrator:
 - Conflicts identified in debate become gaps
 - Advocate agreement → higher confidence
 
+#### Improve the Debate Synthesizer
+**Priority: Medium | Effort: Medium**
+
+**Current weakness:** The synthesizer uses a single LLM call with a prompt to "evaluate fairly" and "weight corroborated evidence higher." There is no structured decision process—it is effectively vibes-based. The model sees advocate arguments and picks what sounds convincing.
+
+**Potential improvements:**
+1. **Structured scoring** — Have each advocate output confidence per claim (or per finding); synthesizer computes a weighted combination (e.g., average, or higher weight when multiple advocates agree).
+2. **Citation overlap analysis** — Programmatically detect when advocates cite the same PMIDs for the same type of claim; use that as a corroboration signal the synthesizer (or a small rule layer) can use.
+3. **Explicit conflict detection** — Before synthesis, extract claims/findings from each advocate and compare; flag contradictions and pass them to the synthesizer with clear "Advocate A says X, Advocate B says Y" so the LLM must address them explicitly.
+4. **Synthesis rubric** — Give the synthesizer a fixed checklist (e.g., "For each major claim: list supporting PMIDs, contradicting PMIDs, and your resolution") so the output is more auditable and less free-form.
+
+**Files to modify:**
+- `app/services/debate/synthesizer.py`
+- Optionally: `app/services/debate/models.py` (if adding structured advocate outputs)
+
 ---
 
 ## 8. Data Source Expansion
