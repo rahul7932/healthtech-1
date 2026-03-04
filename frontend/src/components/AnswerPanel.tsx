@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { TrustReport } from '../types';
 
 interface AnswerPanelProps {
@@ -57,6 +57,8 @@ export function AnswerPanel({ report }: AnswerPanelProps) {
     return info;
   }, [report.claims]);
 
+  const [showHowGenerated, setShowHowGenerated] = useState(false);
+
   return (
     <div className="bg-surface-elevated rounded-2xl p-6 border border-surface-hover">
       <div className="flex items-center gap-3 mb-4">
@@ -97,6 +99,35 @@ export function AnswerPanel({ report }: AnswerPanelProps) {
             );
           })}
         </p>
+      </div>
+
+      {/* How this answer was generated - collapsible */}
+      <div className="mt-6 pt-4 border-t border-surface-hover">
+        <button
+          type="button"
+          onClick={() => setShowHowGenerated(!showHowGenerated)}
+          className="flex w-full items-center justify-between gap-2 text-left text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
+        >
+          <span>How this answer was generated</span>
+          <svg
+            className={`w-4 h-4 shrink-0 transition-transform duration-200 ${showHowGenerated ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {showHowGenerated && (
+          <div className="mt-3 space-y-2 text-sm text-text-muted leading-relaxed">
+            <p>
+              The model first generated a draft answer from retrieved PubMed abstracts. Our trust layer then extracted {report.claims.length} atomic claim(s), matched each to supporting, contradicting, or neutral studies, and detected evidence gaps. The final answer combines these into a single narrative; citation colors show how each source relates to the claims (support / contradict / neutral).
+            </p>
+            <p>
+              You can expand each claim in the Evidence Map below to see the exact studies and relevance scores used.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Citation Legend */}

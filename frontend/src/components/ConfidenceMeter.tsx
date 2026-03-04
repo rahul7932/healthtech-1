@@ -17,6 +17,14 @@ export function ConfidenceMeter({ report }: ConfidenceMeterProps) {
 
   const colors = getColor(confidence);
 
+  // One-line reason for low/moderate confidence
+  const confidenceReason =
+    confidence < 0.4
+      ? 'Several claims have weak or conflicting evidence, or important gaps were detected.'
+      : confidence < 0.7
+        ? 'Some claims have limited evidence or contradictions; see Evidence Map for details.'
+        : null;
+
   // Confidence breakdown by claim
   const claimConfidences = report.claims.map((c) => c.confidence);
   const highConfClaims = claimConfidences.filter((c) => c >= 0.7).length;
@@ -74,6 +82,22 @@ export function ConfidenceMeter({ report }: ConfidenceMeterProps) {
           </div>
         </div>
       </div>
+
+      {/* How we compute confidence */}
+      <div className="mb-6 rounded-xl bg-surface border border-surface-hover p-3">
+        <h3 className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">How we compute this</h3>
+        <p className="text-xs text-text-muted leading-relaxed">
+          Overall confidence is derived from each claim’s confidence (based on supporting vs. contradicting evidence) and is reduced when evidence gaps or contradictions are present.
+        </p>
+      </div>
+
+      {confidenceReason && (
+        <div className={`mb-6 rounded-xl border p-3 ${confidence >= 0.4 ? 'bg-trust-medium/5 border-trust-medium/20' : 'bg-trust-low/5 border-trust-low/20'}`}>
+          <p className={`text-xs ${confidence >= 0.4 ? 'text-trust-medium' : 'text-trust-low'}`}>
+            {confidenceReason}
+          </p>
+        </div>
+      )}
 
       {/* Claim confidence breakdown */}
       <div className="space-y-3">

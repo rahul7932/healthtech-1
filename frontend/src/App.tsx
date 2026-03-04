@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { QueryInput, AnswerPanel, EvidenceMap, ConfidenceMeter, GapsPanel } from './components';
+import { QueryInput, AnswerPanel, EvidenceMap, ConfidenceMeter, GapsPanel, PipelineStepper, SystemStatus } from './components';
 import { submitQuery, ApiError } from './api/client';
 import type { TrustReport } from './types';
 
@@ -64,17 +64,8 @@ function App() {
           </div>
         )}
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="relative w-20 h-20">
-              <div className="absolute inset-0 rounded-full border-4 border-surface-hover"></div>
-              <div className="absolute inset-0 rounded-full border-4 border-accent border-t-transparent animate-spin"></div>
-            </div>
-            <p className="mt-6 text-text-secondary text-lg">Analyzing evidence...</p>
-            <p className="mt-2 text-text-muted text-sm">This may take a moment</p>
-          </div>
-        )}
+        {/* Loading State - multi-step pipeline indicator */}
+        {isLoading && <PipelineStepper isLoading={isLoading} />}
 
         {/* Results */}
         {report && !isLoading && (
@@ -117,7 +108,10 @@ function App() {
 
       {/* Footer */}
       <footer className="border-t border-surface-hover mt-16">
-        <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="max-w-7xl mx-auto px-6 py-6 space-y-4">
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+            <SystemStatus />
+          </div>
           <p className="text-sm text-text-muted text-center">
             <span className="font-semibold">Disclaimer:</span> This tool is for informational purposes only 
             and should not be used as a substitute for professional medical advice, diagnosis, or treatment.

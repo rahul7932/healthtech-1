@@ -196,7 +196,12 @@ export function EvidenceMap({ claims }: EvidenceMapProps) {
         </div>
         <div>
           <h2 className="text-xl font-semibold text-text-primary">Evidence Map</h2>
-          <p className="text-text-muted text-sm">{claims.length} claims extracted</p>
+          <p className="text-text-muted text-sm">
+            Step: Claim extraction and evidence linking · {claims.length} claims extracted
+          </p>
+          <p className="mt-1 text-xs text-text-muted">
+            Documents are ranked by relevance (semantic similarity) to each claim. Expand a claim to see supporting, contradicting, and mentioned sources with scores.
+          </p>
         </div>
       </div>
 

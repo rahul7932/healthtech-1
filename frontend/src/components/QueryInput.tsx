@@ -86,6 +86,10 @@ export function QueryInput({ onSubmit, isLoading }: QueryInputProps) {
         </div>
       </form>
 
+      <p className="mt-3 text-sm text-text-muted max-w-2xl">
+        We break your question into claims, retrieve clinical studies from PubMed, and verify each claim against the literature. Best for treatment and efficacy questions; not a substitute for clinical diagnosis.
+      </p>
+
       {/* Example queries */}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <span className="text-text-muted text-sm leading-none">Try:</span>

@@ -18,6 +18,9 @@ export function GapsPanel({ globalGaps }: GapsPanelProps) {
         <div>
           <h2 className="text-xl font-semibold text-text-primary">Knowledge Gaps</h2>
           <p className="text-text-muted text-sm">Missing or incomplete evidence</p>
+          <p className="mt-1 text-xs text-text-muted">
+            These gaps are identified from claim-level missing evidence and topic-level checks across the answer. They indicate where the retrieved literature did not fully address a clinical aspect.
+          </p>
         </div>
       </div>
 
@@ -40,9 +43,7 @@ export function GapsPanel({ globalGaps }: GapsPanelProps) {
       {/* Disclaimer */}
       <div className="mt-4 pt-4 border-t border-surface-hover">
         <p className="text-xs text-text-muted leading-relaxed">
-          <span className="font-semibold">Note:</span> These gaps indicate areas where the retrieved 
-          evidence may not fully address all relevant clinical considerations. Additional research 
-          or expert consultation may be warranted.
+          <span className="font-semibold">Note:</span> Additional research or expert consultation may be warranted in these areas.
         </p>
       </div>
     </div>
