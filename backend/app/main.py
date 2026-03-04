@@ -84,6 +84,12 @@ app.add_middleware(
 app.include_router(api_router)
 
 
+@app.get("/")
+async def root():
+    """Root endpoint for health checks and discovery."""
+    return {"service": "Medical AI Trust Layer API", "docs": "/docs", "health": "/health"}
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
