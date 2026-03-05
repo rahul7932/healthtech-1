@@ -4,5 +4,5 @@ export { EvidenceMap } from './EvidenceMap';
 export { ConfidenceMeter } from './ConfidenceMeter';
 export { GapsPanel } from './GapsPanel';
 export { PipelineStepper } from './PipelineStepper';
-export { SystemStatus } from './SystemStatus';
+export { DocumentCount } from './DocumentCount';
 export { DebatePanel } from './DebatePanel';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { QueryInput, type QueryOptions, AnswerPanel, EvidenceMap, ConfidenceMeter, GapsPanel, PipelineStepper, SystemStatus, DebatePanel } from './components';
+import { QueryInput, type QueryOptions, AnswerPanel, EvidenceMap, ConfidenceMeter, GapsPanel, PipelineStepper, DocumentCount, DebatePanel } from './components';
 import { submitQuery, ApiError } from './api/client';
 import type { TrustReport } from './types';
 
@@ -219,8 +219,8 @@ function App() {
       {/* Footer */}
       <footer className="border-t border-surface-hover mt-16">
         <div className="max-w-7xl mx-auto px-6 py-6 space-y-4">
-          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-            <SystemStatus />
+          <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 text-center">
+            <DocumentCount />
           </div>
           <p className="text-sm text-text-muted text-center">
             <span className="font-semibold">Disclaimer:</span> This tool is for informational purposes only 
