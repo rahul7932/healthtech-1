@@ -8,10 +8,12 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastOptions, setLastOptions] = useState<QueryOptions | null>(null);
+  const [showDemoLimitModal, setShowDemoLimitModal] = useState(false);
 
   const handleQuery = async (question: string, options: QueryOptions) => {
     setIsLoading(true);
     setError(null);
+    setShowDemoLimitModal(false);
     setLastOptions(options);
     
     try {
@@ -25,7 +27,7 @@ function App() {
     } catch (err) {
       if (err instanceof ApiError) {
         if (err.status === 429) {
-          setError('Demo limit reached for this IP. Please contact us for full access.');
+          setShowDemoLimitModal(true);
         } else {
           setError(err.message);
         }
@@ -40,6 +42,45 @@ function App() {
 
   return (
     <div className="min-h-screen bg-surface text-text-primary">
+      {/* Demo limit reached modal */}
+      {showDemoLimitModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
+          onClick={() => setShowDemoLimitModal(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="demo-limit-title"
+        >
+          <div
+            className="rounded-2xl bg-surface-elevated border border-surface-hover shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 w-12 h-12 rounded-xl bg-contradicts/10 flex items-center justify-center">
+                <svg className="w-6 h-6 text-contradicts" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 id="demo-limit-title" className="text-lg font-semibold text-text-primary">
+                  Demo limit reached
+                </h2>
+                <p className="mt-2 text-sm text-text-secondary">
+                  You've used the free demo allowance for this session. Please contact us for full access.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowDemoLimitModal(false)}
+                  className="mt-4 w-full px-4 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white font-medium text-sm transition-colors"
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <header className="border-b border-surface-hover bg-surface-elevated/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
