@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { QueryInput, type QueryOptions, AnswerPanel, EvidenceMap, ConfidenceMeter, GapsPanel, PipelineStepper, SystemStatus } from './components';
+import { QueryInput, type QueryOptions, AnswerPanel, EvidenceMap, ConfidenceMeter, GapsPanel, PipelineStepper, SystemStatus, DebatePanel } from './components';
 import { submitQuery, ApiError } from './api/client';
 import type { TrustReport } from './types';
 
@@ -19,6 +19,7 @@ function App() {
         question,
         top_k: 5,
         live_fetch: options.live_fetch,
+        use_agentic_debate: options.use_agentic_debate,
       });
       setReport(result);
     } catch (err) {
@@ -131,6 +132,11 @@ function App() {
           <div className="space-y-6 animate-in fade-in duration-500">
             {/* Answer Panel - Full Width */}
             <AnswerPanel report={report} />
+
+            {/* Agentic Debate Panel (when enabled) */}
+            {report.used_agentic_debate && (report.debate_advocates?.length ?? 0) > 0 && (
+              <DebatePanel report={report} />
+            )}
 
             {/* Two Column Layout for Evidence + Confidence */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

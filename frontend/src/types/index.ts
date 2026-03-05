@@ -31,6 +31,14 @@ export interface EvidenceSummary {
   neutral: number;
 }
 
+export interface DebateAdvocateView {
+  group_id: string;
+  argument: string;
+  key_findings: string[];
+  confidence: number;
+  cited_pmids: string[];
+}
+
 // The main trust report - returned from /api/query
 export interface TrustReport {
   query: string;
@@ -44,6 +52,11 @@ export interface TrustReport {
   documents_fetched?: number;
   coverage_before_fetch?: CoverageInfo | null;
   coverage_after_fetch?: CoverageInfo | null;
+  used_agentic_debate?: boolean;
+  debate_advocates?: DebateAdvocateView[] | null;
+  debate_synthesis_reasoning?: string | null;
+  debate_transcript?: string | null;
+  debate_metadata?: Record<string, unknown> | null;
 }
 
 // Request body for /api/query
@@ -54,6 +67,8 @@ export interface QueryRequest {
   live_fetch?: boolean;
   /** Max documents to fetch from PubMed when live_fetch is true (default 50) */
   max_fetch?: number;
+  /** If set, overrides USE_AGENTIC_DEBATE config for this query only */
+  use_agentic_debate?: boolean;
 }
 
 export interface CoverageInfo {

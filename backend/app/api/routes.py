@@ -69,6 +69,7 @@ async def query(
         top_k=request.top_k,
         live_fetch=request.live_fetch,
         max_fetch=request.max_fetch,
+        use_agentic_debate=request.use_agentic_debate,
     )
 
 

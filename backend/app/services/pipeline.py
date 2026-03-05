@@ -46,6 +46,7 @@ from app.models.schemas import (
     EvidenceSummary,
     DocumentWithScore,
     CoverageInfo,
+    DebateAdvocateView,
 )
 
 # Services
@@ -134,6 +135,7 @@ class QueryPipeline:
         top_k: int = 10,
         live_fetch: bool = False,
         max_fetch: int | None = None,
+        use_agentic_debate: bool | None = None,
     ) -> TrustReport:
         """
         Run the full pipeline and return a TrustReport.
@@ -170,7 +172,7 @@ class QueryPipeline:
             return self._build_empty_report(result)
         
         # Stage 2: Generation
-        await self._stage_generation(result)
+        await self._stage_generation(result, use_agentic_debate=use_agentic_debate)
         
         # Stage 3: Trust Layer
         await self._stage_trust_layer(result)
@@ -280,7 +282,11 @@ class QueryPipeline:
     # STAGE 2: GENERATION
     # =========================================================================
     
-    async def _stage_generation(self, result: PipelineResult) -> None:
+    async def _stage_generation(
+        self,
+        result: PipelineResult,
+        use_agentic_debate: bool | None = None,
+    ) -> None:
         """
         Generate an answer with citations.
         
@@ -288,8 +294,9 @@ class QueryPipeline:
         The debate system runs multiple advocates then synthesizes their arguments.
         """
         settings = get_settings()
+        use_debate = use_agentic_debate if use_agentic_debate is not None else settings.use_agentic_debate
         
-        if settings.use_agentic_debate:
+        if use_debate:
             # Agentic debate: multiple advocates argue, synthesizer combines
             logger.info(
                 f"Using agentic debate with {settings.debate_num_advocates} advocates"
@@ -391,6 +398,34 @@ class QueryPipeline:
     def _build_trust_report(self, result: PipelineResult) -> TrustReport:
         """Assemble the final TrustReport from pipeline results."""
         claims = self._build_claims(result)
+
+        debate_kwargs: dict | None = None
+        if result.debate_result is not None:
+            debate_result = result.debate_result
+            debate_kwargs = {
+                "used_agentic_debate": True,
+                "debate_advocates": [
+                    DebateAdvocateView(
+                        group_id=adv.group_id,
+                        argument=adv.argument,
+                        key_findings=adv.key_findings,
+                        confidence=adv.confidence,
+                        cited_pmids=adv.cited_pmids,
+                    )
+                    for adv in debate_result.advocate_responses
+                ],
+                "debate_synthesis_reasoning": debate_result.synthesis_reasoning,
+                "debate_transcript": debate_result.debate_transcript or None,
+                "debate_metadata": debate_result.metadata or None,
+            }
+        else:
+            debate_kwargs = {
+                "used_agentic_debate": False,
+                "debate_advocates": None,
+                "debate_synthesis_reasoning": None,
+                "debate_transcript": None,
+                "debate_metadata": None,
+            }
         
         return TrustReport(
             query=result.question,
@@ -404,6 +439,7 @@ class QueryPipeline:
             documents_fetched=result.documents_fetched,
             coverage_before_fetch=result.coverage_before_fetch,
             coverage_after_fetch=result.coverage_after_fetch,
+            **debate_kwargs,
         )
     
     def _build_claims(self, result: PipelineResult) -> list[Claim]:
@@ -475,6 +511,7 @@ async def run_query_pipeline(
     top_k: int = 10,
     live_fetch: bool = False,
     max_fetch: int | None = None,
+    use_agentic_debate: bool | None = None,
 ) -> TrustReport:
     """
     Convenience function to run the query pipeline.
@@ -492,4 +529,5 @@ async def run_query_pipeline(
         top_k=top_k,
         live_fetch=live_fetch,
         max_fetch=max_fetch,
+        use_agentic_debate=use_agentic_debate,
     )

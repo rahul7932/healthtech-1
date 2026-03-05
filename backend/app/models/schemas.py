@@ -15,6 +15,7 @@ FLOW OVERVIEW:
 
 from datetime import date, datetime
 from pydantic import BaseModel, Field
+from typing import Any
 
 
 # =============================================================================
@@ -173,6 +174,34 @@ class CoverageInfo(BaseModel):
     reason: str
 
 
+class DebateAdvocateView(BaseModel):
+    """
+    Lightweight view of a single advocate's contribution in agentic debate.
+    
+    USED BY: TrustReport when agentic debate is enabled
+    DISPLAYED: In the frontend to show what each agent argued
+    """
+    group_id: str = Field(
+        description="Identifier for this advocate group (e.g., 'group_1')"
+    )
+    argument: str = Field(
+        description="The advocate's natural language argument for its documents"
+    )
+    key_findings: list[str] = Field(
+        default_factory=list,
+        description="Bullet-point summary of key evidence highlighted by this advocate",
+    )
+    confidence: float = Field(
+        ge=0,
+        le=1,
+        description="Self-assessed confidence in this advocate's argument (0-1)",
+    )
+    cited_pmids: list[str] = Field(
+        default_factory=list,
+        description="PMIDs explicitly cited in the advocate's argument",
+    )
+
+
 class TrustReport(BaseModel):
     """
     The main output of the Trust Layer.
@@ -246,6 +275,28 @@ class TrustReport(BaseModel):
         description="Coverage assessment after live fetch + re-retrieval (if fetch ran)"
     )
 
+    # Agentic debate information (when enabled)
+    used_agentic_debate: bool = Field(
+        default=False,
+        description="Whether agentic debate was used instead of standard single-pass generation",
+    )
+    debate_advocates: list[DebateAdvocateView] | None = Field(
+        default=None,
+        description="Per-advocate arguments and confidence scores from the debate run",
+    )
+    debate_synthesis_reasoning: str | None = Field(
+        default=None,
+        description="Explanation of how the final answer was synthesized from advocate arguments",
+    )
+    debate_transcript: str | None = Field(
+        default=None,
+        description="Full text transcript of the debate (for audit/debugging; may be long)",
+    )
+    debate_metadata: dict[str, Any] | None = Field(
+        default=None,
+        description="Timing and other metadata captured during the debate run",
+    )
+
 
 # =============================================================================
 # API REQUEST SCHEMAS
@@ -290,6 +341,10 @@ class QueryRequest(BaseModel):
         le=200,
         description="Maximum documents to fetch from PubMed (only used when live_fetch=true). "
         "If omitted, the backend uses LIVE_FETCH_MAX_RESULTS from config."
+    )
+    use_agentic_debate: bool | None = Field(
+        default=None,
+        description="If set, overrides USE_AGENTIC_DEBATE config for this query only",
     )
 
 
