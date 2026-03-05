@@ -186,6 +186,8 @@ function ClaimCard({ claim, index }: { claim: Claim; index: number }) {
 }
 
 export function EvidenceMap({ claims }: EvidenceMapProps) {
+  const sortedClaims = [...claims].sort((a, b) => b.confidence - a.confidence);
+
   return (
     <div className="bg-surface-elevated rounded-2xl p-6 border border-surface-hover">
       <div className="flex items-center gap-3 mb-4">
@@ -206,7 +208,7 @@ export function EvidenceMap({ claims }: EvidenceMapProps) {
       </div>
 
       <div className="space-y-3">
-        {claims.map((claim, i) => (
+        {sortedClaims.map((claim, i) => (
           <ClaimCard key={claim.id} claim={claim} index={i} />
         ))}
       </div>
