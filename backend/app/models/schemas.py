@@ -284,10 +284,12 @@ class QueryRequest(BaseModel):
         default=False,
         description="If true, fetch from PubMed when document coverage is insufficient"
     )
-    max_fetch: int = Field(
-        default=50,
-        ge=10, le=200,
-        description="Maximum documents to fetch from PubMed (only used when live_fetch=true)"
+    max_fetch: int | None = Field(
+        default=None,
+        ge=10,
+        le=200,
+        description="Maximum documents to fetch from PubMed (only used when live_fetch=true). "
+        "If omitted, the backend uses LIVE_FETCH_MAX_RESULTS from config."
     )
 
 

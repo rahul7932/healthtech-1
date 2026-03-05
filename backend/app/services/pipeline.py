@@ -133,7 +133,7 @@ class QueryPipeline:
         question: str,
         top_k: int = 10,
         live_fetch: bool = False,
-        max_fetch: int = 50,
+        max_fetch: int | None = None,
     ) -> TrustReport:
         """
         Run the full pipeline and return a TrustReport.
@@ -147,14 +147,19 @@ class QueryPipeline:
         Returns:
             TrustReport with answer, claims, confidence, and gaps
         """
-        logger.info(f"Pipeline starting: '{question}' (live_fetch={live_fetch})")
+        settings = get_settings()
+        effective_max_fetch = max_fetch if max_fetch is not None else settings.live_fetch_max_results
+
+        logger.info(
+            f"Pipeline starting: '{question}' (live_fetch={live_fetch}, max_fetch={effective_max_fetch})"
+        )
         
         # Initialize result tracking
         result = PipelineResult(
             question=question,
             top_k=top_k,
             live_fetch=live_fetch,
-            max_fetch=max_fetch,
+            max_fetch=effective_max_fetch,
         )
         
         # Stage 1: Retrieval
@@ -469,7 +474,7 @@ async def run_query_pipeline(
     db: AsyncSession,
     top_k: int = 10,
     live_fetch: bool = False,
-    max_fetch: int = 50,
+    max_fetch: int | None = None,
 ) -> TrustReport:
     """
     Convenience function to run the query pipeline.
