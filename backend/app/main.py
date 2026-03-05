@@ -8,8 +8,9 @@ from app.config import get_settings
 from app.database import engine, Base
 
 # Import models so SQLAlchemy knows about them when creating tables
-# Without this import, Base.metadata.create_all() wouldn't know about Document
+# Without these imports, Base.metadata.create_all() wouldn't know about them
 from app.models.document import Document  # noqa: F401
+from app.models.demo_usage import DemoUsage  # noqa: F401
 
 # Import API routes
 from app.api.routes import router as api_router

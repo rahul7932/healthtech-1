@@ -148,18 +148,12 @@ class DebateOrchestrator:
             )
         
         logger.info(
-            f"Starting debate: {len(documents)} documents, "
-            f"{self.num_advocates} advocates"
+            f"Starting persona-based debate: {len(documents)} documents, "
+            "personas = clinical, methodologist, safety, patient"
         )
         
-        # Step 1: Split documents among advocates
-        doc_groups = _split_documents(documents, self.num_advocates)
-        logger.info(
-            f"Document split: {[len(g) for g in doc_groups]} docs per advocate"
-        )
-        
-        # Step 2: Run advocates in parallel
-        advocate_responses = await self._run_advocates(query, doc_groups)
+        # Step 1: Run persona advocates (all see the full document set)
+        advocate_responses = await self._run_persona_advocates(query, documents)
         advocate_time = time.time() - start_time
         logger.info(f"Advocates completed in {advocate_time:.2f}s")
         
@@ -189,9 +183,9 @@ class DebateOrchestrator:
             debate_transcript=transcript,
             rounds=[debate_round],
             metadata={
-                "num_advocates": self.num_advocates,
+                "num_advocates": len(advocate_responses),
                 "num_documents": len(documents),
-                "docs_per_advocate": [len(g) for g in doc_groups],
+                "personas": [r.group_id for r in advocate_responses],
                 "advocate_time_seconds": round(advocate_time, 2),
                 "synthesis_time_seconds": round(synthesis_time, 2),
                 "total_time_seconds": round(total_time, 2),
@@ -207,30 +201,32 @@ class DebateOrchestrator:
         
         return result
     
-    async def _run_advocates(
+    async def _run_persona_advocates(
         self,
         query: str,
-        doc_groups: list[list[DocumentWithScore]],
+        documents: list[DocumentWithScore],
     ) -> list[AdvocateResponse]:
-        """Run all advocates in parallel."""
-        # Create advocate tasks
+        """Run clinical, methodologist, safety, and patient advocates in parallel."""
+        personas = [
+            ("clinical", "clinical"),
+            ("methodologist", "methodologist"),
+            ("safety", "safety"),
+            ("patient", "patient"),
+        ]
         tasks = []
-        for i, docs in enumerate(doc_groups):
-            group_id = f"group_{i + 1}"
-            advocate = DocumentAdvocate(group_id)
-            tasks.append(advocate.argue(query, docs))
+        for group_id, persona in personas:
+            advocate = DocumentAdvocate(group_id=group_id, persona=persona)  # type: ignore[arg-type]
+            tasks.append(advocate.argue(query, documents))
         
-        # Run in parallel
         responses = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Handle any exceptions
-        valid_responses = []
-        for i, response in enumerate(responses):
+        valid_responses: list[AdvocateResponse] = []
+        for (group_id, _persona), response in zip(personas, responses):
             if isinstance(response, Exception):
-                logger.error(f"Advocate group_{i + 1} failed: {response}")
+                logger.error(f"Advocate {group_id} failed: {response}")
                 valid_responses.append(AdvocateResponse(
-                    group_id=f"group_{i + 1}",
-                    documents=doc_groups[i],
+                    group_id=group_id,
+                    documents=documents,
                     argument=f"Advocate failed: {str(response)}",
                     key_findings=[],
                     confidence=0.0,

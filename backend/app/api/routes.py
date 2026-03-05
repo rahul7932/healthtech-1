@@ -13,7 +13,7 @@ Routes handle HTTP concerns: validation, dependencies, responses.
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -29,6 +29,7 @@ from app.services.pipeline import QueryPipeline
 from app.services.pubmed import fetch_pubmed_articles
 from app.services.embeddings import embed_all_documents
 from app.services.document_service import DocumentService
+from app.services.demo_limit import enforce_demo_limit
 
 logger = logging.getLogger(__name__)
 
@@ -41,19 +42,21 @@ router = APIRouter(prefix="/api", tags=["api"])
 
 @router.post("/query", response_model=TrustReport)
 async def query(
-    request: QueryRequest,
+    payload: QueryRequest,
+    raw_request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> TrustReport:
     """
     Ask a medical question, get a verified answer with trust metrics.
     
     The full pipeline:
-    1. Expand query with medical synonyms
-    2. Retrieve relevant documents (hybrid search)
-    3. [Optional] Fetch from PubMed if coverage is low
-    4. Generate answer with citations
-    5. Run Trust Layer (verify, extract, score, confidence, gaps)
-    6. Return TrustReport
+    1. Enforce per-IP demo usage limit
+    2. Expand query with medical synonyms
+    3. Retrieve relevant documents (hybrid search)
+    4. [Optional] Fetch from PubMed if coverage is low
+    5. Generate answer with citations
+    6. Run Trust Layer (verify, extract, score, confidence, gaps)
+    7. Return TrustReport
     
     Example:
         POST /api/query
@@ -62,14 +65,23 @@ async def query(
     With live fetch:
         {"question": "...", "live_fetch": true, "max_fetch": 50}
     """
+    # Extract client IP (respecting X-Forwarded-For when behind a proxy).
+    x_forwarded_for = raw_request.headers.get("x-forwarded-for")
+    if x_forwarded_for:
+        client_ip = x_forwarded_for.split(",")[0].strip()
+    else:
+        client_ip = raw_request.client.host if raw_request.client else "unknown"
+
+    await enforce_demo_limit(client_ip, db)
+
     pipeline = QueryPipeline(db)
     
     return await pipeline.run(
-        question=request.question,
-        top_k=request.top_k,
-        live_fetch=request.live_fetch,
-        max_fetch=request.max_fetch,
-        use_agentic_debate=request.use_agentic_debate,
+        question=payload.question,
+        top_k=payload.top_k,
+        live_fetch=payload.live_fetch,
+        max_fetch=payload.max_fetch,
+        use_agentic_debate=payload.use_agentic_debate,
     )
 
 

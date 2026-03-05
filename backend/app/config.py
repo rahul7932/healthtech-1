@@ -42,6 +42,12 @@ class Settings(BaseSettings):
     # Set in production (e.g. Railway) to your frontend URL. Leave empty for local dev (localhost:5173).
     frontend_origin: str = ""
 
+    # Demo usage limiting
+    # When enabled, enforces a small per-IP allowance of demo queries.
+    demo_limit_enabled: bool = True
+    # Maximum number of demo queries allowed per IP address.
+    demo_limit_max_requests: int = 2
+
     model_config = SettingsConfigDict(env_file=".env")
 
 

@@ -36,34 +36,39 @@ logger = logging.getLogger(__name__)
 
 SYNTHESIZER_MODEL = "gpt-4o"
 
-SYNTHESIZER_SYSTEM_PROMPT = """You are a medical synthesis expert who evaluates competing arguments and produces balanced, evidence-based answers.
+SYNTHESIZER_SYSTEM_PROMPT = """You are a medical synthesis expert who evaluates complementary perspectives and produces balanced, evidence-based answers.
 
 YOUR ROLE:
-Multiple advocate agents have analyzed different sets of research papers. Each advocate has argued why their papers best answer the query. Your job is to:
-1. Evaluate all arguments fairly
-2. Identify where advocates agree and disagree
-3. Synthesize the best answer from all available evidence
-4. Be transparent about conflicts or uncertainties
+Four distinct agents have analyzed the same set of research papers:
+- CLINICAL: focuses on bedside decisions and what to tell patients.
+- METHODOLOGIST: focuses on study design, bias, and strength of evidence.
+- SAFETY: focuses on harms, adverse effects, and monitoring.
+- PATIENT / QUALITY-OF-LIFE: focuses on symptoms, functioning, treatment burden, and outcomes that matter most to patients.
+
+Each advocate has argued from their own perspective. Your job is to:
+1. Evaluate all arguments fairly.
+2. Identify where the perspectives agree and where they differ.
+3. Synthesize the best overall answer for the clinical question.
+4. Be transparent about conflicts or uncertainties and how they affect practice.
 
 RULES:
-1. Consider ALL advocate arguments - don't favor any single advocate
-2. Evidence corroborated by multiple advocates should be weighted higher
-3. Acknowledge when advocates disagree and explain why you chose your synthesis
-4. Use [PMID:xxxxx] citations from the advocates' arguments
-5. If advocates conflict, present both views and indicate which has stronger evidence
-6. Be honest about limitations in the overall evidence base
+1. Consider ALL advocate arguments - don't favor any single perspective by default.
+2. Evidence corroborated across perspectives (e.g., strong methods + clinical benefit + acceptable safety + patient-important benefits) should be weighted higher.
+3. When perspectives conflict, explain the trade-offs (e.g., promising benefit but weak methods, safety concerns, or poor quality-of-life impact).
+4. Use [PMID:xxxxx] citations from the advocates' arguments.
+5. Be honest about limitations in the overall evidence base and where more research is needed.
 
 OUTPUT FORMAT:
 Write your response in two parts:
-1. ANSWER: A clear, well-structured answer (2-4 paragraphs) with citations
-2. REASONING: Brief explanation of how you synthesized the advocates' arguments
+1. ANSWER: A clear, well-structured answer (2-4 paragraphs) with citations, suitable for a clinician.
+2. REASONING: Brief explanation of how you synthesized the clinical, methodological, safety, and patient / quality-of-life arguments.
 
 Structure as:
 ---ANSWER---
 [Your synthesized answer with [PMID:xxxxx] citations]
 
 ---REASONING---
-[Your synthesis reasoning - which advocates agreed, where they differed, why you weighted evidence as you did]"""
+[Your synthesis reasoning - how you combined clinical / methodological / safety / patient-quality-of-life views, where they agreed or conflicted, and why you weighted evidence as you did]"""
 
 
 def _format_advocate_arguments(responses: list[AdvocateResponse]) -> str:

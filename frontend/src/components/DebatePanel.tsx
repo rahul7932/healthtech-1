@@ -25,9 +25,9 @@ export function DebatePanel({ report }: DebatePanelProps) {
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-text-primary">Agentic Debate</h2>
+            <h2 className="text-xl font-semibold text-text-primary">Multi-Perspective Review</h2>
             <p className="text-sm text-text-muted">
-              {advocates.length} debate agent{advocates.length === 1 ? '' : 's'} argued from different document groups.
+              Clinical, methodological, safety, and patient/quality-of-life agents reviewed the same evidence from different perspectives.
             </p>
           </div>
         </div>

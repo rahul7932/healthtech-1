@@ -24,7 +24,11 @@ function App() {
       setReport(result);
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message);
+        if (err.status === 429) {
+          setError('Demo limit reached for this IP. Please contact us for full access.');
+        } else {
+          setError(err.message);
+        }
       } else {
         setError('An unexpected error occurred. Please try again.');
       }
