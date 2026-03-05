@@ -13,8 +13,9 @@
 
 Most medical RAG systems do this:
 
-```
-Question → Retrieve documents → Generate answer → Done ✓
+```mermaid
+flowchart LR
+  A[Question] --> B[Retrieve documents] --> C[Generate answer] --> D[Done ✓]
 ```
 
 They give you an answer but can't explain:
@@ -31,13 +32,12 @@ This opacity is fundamentally incompatible with evidence-based medicine.
 
 ApertureMD adds a **Trust Layer** — a post-hoc verification engine that audits every answer:
 
-```
-Question → Retrieve → Generate → TRUST LAYER → Trust Report
-                                      │
-                         ┌────────────┼────────────┐
-                         │            │            │
-                    Extract      Score        Detect
-                    Claims    Attribution     Gaps
+```mermaid
+flowchart LR
+  Q[Question] --> R[Retrieve] --> G[Generate] --> T[Trust Layer] --> TR[Trust Report]
+  T --> E[Extract Claims]
+  T --> S[Score Attribution]
+  T --> D[Detect Gaps]
 ```
 
 The output is a **Trust Report** that tells you:
@@ -221,49 +221,14 @@ Gaps detected:
 
 Here's how all four components work together:
 
-```
-Generated Answer
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│ 1. Claim Extractor                                       │
-│    Input: "ACE inhibitors reduce mortality [PMID:123]"  │
-│    Output: [                                              │
-│      Claim("ACE inhibitors reduce mortality", pmids=[123])│
-│    ]                                                      │
-└─────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│ 2. Attribution Scorer                                    │
-│    For each (claim, document) pair:                       │
-│    - Claim vs Doc A → SUPPORTS                           │
-│    - Claim vs Doc B → CONTRADICTS                        │
-│    - Claim vs Doc C → NEUTRAL                            │
-│    Output: ScoredClaim with categorized docs            │
-└─────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│ 3. Confidence Calculator                                 │
-│    agreement = (1 - 1) / 3 = 0.0                        │
-│    source_factor = log(1 + 1) / log(11) ≈ 0.29          │
-│    confidence = 0.3 + 0.0 × 0.29 × 0.7 ≈ 0.30          │
-│    Output: confidence = 0.30 (low due to contradiction) │
-└─────────────────────────────────────────────────────────┘
-    │
-    ▼
-┌─────────────────────────────────────────────────────────┐
-│ 4. Gap Detector                                          │
-│    Analyzes claim + supporting evidence                  │
-│    Output: [                                             │
-│      "Pediatric population not addressed",               │
-│      "Long-term outcomes (>5 years) unknown"            │
-│    ]                                                      │
-└─────────────────────────────────────────────────────────┘
-    │
-    ▼
-Trust Report (JSON with all claims, scores, gaps)
+```mermaid
+flowchart TB
+  GA[Generated Answer] --> CE[1. Claim Extractor]
+  CE --> AS[2. Attribution Scorer]
+  AS --> CC[3. Confidence Calculator]
+  CC --> GD[4. Gap Detector]
+  GD --> TR[Trust Report]
+  TR --> TRJ["JSON: claims, scores, gaps"]
 ```
 
 **Key Properties:**
@@ -294,56 +259,32 @@ Trust Report (JSON with all claims, scores, gaps)
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                           USER QUERY                                 │
-│              "Do ACE inhibitors reduce mortality?"                   │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                        RETRIEVAL LAYER                               │
-│                                                                      │
-│   Query Expander ──► Embeddings (OpenAI) ──► pgvector ──► Top K     │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                       GENERATION LAYER                               │
-│                                                                      │
-│                    RAG Generator (GPT-4o)                            │
-│        "ACE inhibitors reduce mortality [PMID:12345]..."            │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                 TRUST LAYER  ← The Core Innovation                   │
-│                                                                      │
-│   ┌──────────────┐    ┌───────────────┐    ┌──────────────────┐    │
-│   │    Claim     │───►│  Attribution  │───►│   Confidence     │    │
-│   │  Extractor   │    │    Scorer     │    │   Calculator     │    │
-│   └──────────────┘    └───────────────┘    └──────────────────┘    │
-│          │                                          │               │
-│          └──────────────┐    ┌──────────────────────┘               │
-│                         ▼    ▼                                       │
-│                   ┌──────────────┐                                   │
-│                   │ Gap Detector │                                   │
-│                   └──────────────┘                                   │
-│                                                                      │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         TRUST REPORT                                 │
-│  {                                                                   │
-│    "claims": [...],                                                  │
-│    "overall_confidence": 0.73,                                       │
-│    "evidence_summary": { "supporting": 4, "contradicting": 1 },     │
-│    "global_gaps": ["Long-term outcomes unknown"]                     │
-│  }                                                                   │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+  subgraph UQ[" "]
+    U["USER QUERY\n\"Do ACE inhibitors reduce mortality?\""]
+  end
+
+  subgraph RL["RETRIEVAL LAYER"]
+    QE[Query Expander] --> EM[Embeddings OpenAI] --> PV[pgvector] --> TK[Top K]
+  end
+
+  subgraph GL["GENERATION LAYER"]
+    RAG["RAG Generator (GPT-4o)\n\"ACE inhibitors reduce mortality [PMID:12345]...\""]
+  end
+
+  subgraph TL["TRUST LAYER (Core Innovation)"]
+    CE[Claim Extractor] --> ASC[Attribution Scorer] --> CCC[Confidence Calculator]
+    CE --> GAP[Gap Detector]
+    CCC --> GAP
+  end
+
+  subgraph OUT[" "]
+    TR["TRUST REPORT"]
+    TRJ["claims, overall_confidence\nevidence_summary, global_gaps"]
+  end
+
+  U --> RL --> GL --> TL --> TR --> TRJ
 ```
 
 ---
