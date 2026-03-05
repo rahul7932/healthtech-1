@@ -43,7 +43,7 @@
 % Title
 \title{
     \vspace{-1cm}
-    \textbf{MedTrust AI: An Epistemology Layer for \\Medical Question Answering Systems}\\[0.5em]
+    \textbf{ApertureMD: An Epistemology Layer for \\Medical Question Answering Systems}\\[0.5em]
     \large Transparent Evidence Attribution, Confidence Estimation, and Knowledge Gap Detection
 }
 
@@ -59,7 +59,7 @@
 \maketitle
 
 \begin{abstract}
-Large Language Models (LLMs) augmented with Retrieval-Augmented Generation (RAG) have shown promise in medical question answering. However, these systems typically produce opaque answers without transparent evidence attribution, confidence quantification, or acknowledgment of knowledge limitations. We present \textbf{MedTrust AI}, a post-hoc verification framework that adds an ``epistemology layer'' to medical RAG systems. Our approach decomposes generated answers into atomic claims, scores each claim against retrieved evidence, computes evidence-based confidence metrics, and systematically identifies knowledge gaps. The system produces a structured \textit{Trust Report} that enables clinicians and researchers to evaluate answer reliability at a granular level. We describe the architecture, methodology, and implementation of this system, demonstrating how transparent AI reasoning can bridge the gap between LLM capabilities and the rigorous evidentiary standards required in medical practice.
+Large Language Models (LLMs) augmented with Retrieval-Augmented Generation (RAG) have shown promise in medical question answering. However, these systems typically produce opaque answers without transparent evidence attribution, confidence quantification, or acknowledgment of knowledge limitations. We present \textbf{ApertureMD}, a post-hoc verification framework that adds an ``epistemology layer'' to medical RAG systems. Our approach decomposes generated answers into atomic claims, scores each claim against retrieved evidence, computes evidence-based confidence metrics, and systematically identifies knowledge gaps. The system produces a structured \textit{Trust Report} that enables clinicians and researchers to evaluate answer reliability at a granular level. We describe the architecture, methodology, and implementation of this system, demonstrating how transparent AI reasoning can bridge the gap between LLM capabilities and the rigorous evidentiary standards required in medical practice.
 \end{abstract}
 
 \section{Introduction}
@@ -81,7 +81,7 @@ This opacity is particularly problematic in medicine, where practitioners are tr
 
 \subsection{Our Contribution}
 
-We introduce \textbf{MedTrust AI}, a verification framework that transforms opaque RAG outputs into transparent, auditable trust reports. Rather than replacing the RAG pipeline, our system operates as a \textit{post-hoc verification layer} that:
+We introduce \textbf{ApertureMD}, a verification framework that transforms opaque RAG outputs into transparent, auditable trust reports. Rather than replacing the RAG pipeline, our system operates as a \textit{post-hoc verification layer} that:
 
 \begin{enumerate}
     \item \textbf{Extracts atomic claims} from generated answers
@@ -123,13 +123,13 @@ Existing systems lack what we term \textbf{epistemic transparency}—the ability
     \item What the system \textit{doesn't know}
 \end{itemize}
 
-MedTrust AI addresses this gap directly.
+ApertureMD addresses this gap directly.
 
 \section{System Architecture}
 
 \subsection{Overview}
 
-MedTrust AI operates as a verification layer atop a standard RAG pipeline. The complete system consists of six components executed sequentially:
+ApertureMD operates as a verification layer atop a standard RAG pipeline. The complete system consists of six components executed sequentially:
 
 \begin{figure}[H]
 \centering
@@ -169,7 +169,7 @@ MedTrust AI operates as a verification layer atop a standard RAG pipeline. The c
     ([xshift=-2.5cm]extractor.north west) -- ([xshift=-2.5cm]gaps.south west);
 
 \end{tikzpicture}
-\caption{MedTrust AI system architecture. The Trust Layer (green) operates post-hoc on the RAG output.}
+\caption{ApertureMD system architecture. The Trust Layer (green) operates post-hoc on the RAG output.}
 \label{fig:architecture}
 \end{figure}
 
@@ -290,7 +290,7 @@ Global gaps are aggregated across all claims to identify systematic knowledge li
 
 \section{The Trust Report}
 
-The output of MedTrust AI is a structured Trust Report containing:
+The output of ApertureMD is a structured Trust Report containing:
 
 \begin{lstlisting}
 {
@@ -377,7 +377,7 @@ For a typical query with 10 claims and 5 documents, this results in approximatel
 
 \subsection{Why This Matters}
 
-MedTrust AI addresses a fundamental tension in medical AI: the need for both \textbf{capability} (answering complex questions) and \textbf{accountability} (explaining reasoning). Our system demonstrates that these goals are not mutually exclusive.
+ApertureMD addresses a fundamental tension in medical AI: the need for both \textbf{capability} (answering complex questions) and \textbf{accountability} (explaining reasoning). Our system demonstrates that these goals are not mutually exclusive.
 
 Key implications:
 
@@ -417,11 +417,11 @@ Key implications:
 
 \section{Conclusion}
 
-MedTrust AI demonstrates that medical AI systems can provide not just answers, but \textbf{epistemically transparent reasoning}. By decomposing answers into claims, attributing each to specific evidence, quantifying confidence based on evidence agreement, and systematically identifying knowledge gaps, our system bridges the gap between LLM capabilities and the rigorous standards of evidence-based medicine.
+ApertureMD demonstrates that medical AI systems can provide not just answers, but \textbf{epistemically transparent reasoning}. By decomposing answers into claims, attributing each to specific evidence, quantifying confidence based on evidence agreement, and systematically identifying knowledge gaps, our system bridges the gap between LLM capabilities and the rigorous standards of evidence-based medicine.
 
 The Trust Report format provides a structured interface for human oversight—enabling practitioners to leverage AI capabilities while maintaining the critical evaluation skills that define good medical practice.
 
-As AI systems become more prevalent in healthcare, the ability to ``show your work'' will transition from a nice-to-have to a fundamental requirement. MedTrust AI offers a practical framework for achieving this goal.
+As AI systems become more prevalent in healthcare, the ability to ``show your work'' will transition from a nice-to-have to a fundamental requirement. ApertureMD offers a practical framework for achieving this goal.
 
 \section*{Acknowledgments}
 

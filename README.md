@@ -1,4 +1,4 @@
-# MedTrust AI
+# ApertureMD
 
 **An epistemology layer for medical AI** — transparent evidence attribution, confidence scoring, and knowledge gap detection.
 
@@ -29,7 +29,7 @@ This opacity is fundamentally incompatible with evidence-based medicine.
 
 ## The Solution
 
-MedTrust AI adds a **Trust Layer** — a post-hoc verification engine that audits every answer:
+ApertureMD adds a **Trust Layer** — a post-hoc verification engine that audits every answer:
 
 ```
 Question → Retrieve → Generate → TRUST LAYER → Trust Report
@@ -50,7 +50,7 @@ The output is a **Trust Report** that tells you:
 
 ## Demo
 
-![MedTrust AI Dashboard](https://via.placeholder.com/800x450?text=Dashboard+Screenshot)
+![ApertureMD Dashboard](https://via.placeholder.com/800x450?text=Dashboard+Screenshot)
 
 *Ask a medical question → Get an answer with transparent evidence attribution*
 

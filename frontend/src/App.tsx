@@ -91,7 +91,7 @@ function App() {
               </svg>
             </div>
             <div>
-              <h1 className="text-xl font-bold text-text-primary">MedTrust AI</h1>
+              <h1 className="text-xl font-bold text-text-primary">ApertureMD</h1>
               <p className="text-sm text-text-muted">Evidence-based medical answer verification</p>
             </div>
           </div>
