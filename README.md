@@ -262,7 +262,7 @@ flowchart TB
 ```mermaid
 flowchart TB
   subgraph UQ[" "]
-    U["USER QUERY\n\"Do ACE inhibitors reduce mortality?\""]
+    U["USER QUERY: Do ACE inhibitors reduce mortality?"]
   end
 
   subgraph RL["RETRIEVAL LAYER"]
@@ -270,7 +270,7 @@ flowchart TB
   end
 
   subgraph GL["GENERATION LAYER"]
-    RAG["RAG Generator (GPT-4o)\n\"ACE inhibitors reduce mortality [PMID:12345]...\""]
+    RAG["RAG Generator (GPT-4o)\nAnswer with PMID citations"]
   end
 
   subgraph TL["TRUST LAYER (Core Innovation)"]
@@ -281,7 +281,7 @@ flowchart TB
 
   subgraph OUT[" "]
     TR["TRUST REPORT"]
-    TRJ["claims, overall_confidence\nevidence_summary, global_gaps"]
+    TRJ["claims, overall_confidence, evidence_summary, global_gaps"]
   end
 
   U --> RL --> GL --> TL --> TR --> TRJ
