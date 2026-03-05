@@ -82,7 +82,7 @@ function App() {
       )}
 
       {/* Header */}
-      <header className="border-b border-surface-hover bg-surface-elevated/50 backdrop-blur-sm sticky top-0 z-50">
+      <header className="border-b border-surface-hover bg-white/95 backdrop-blur-sm sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent to-supports flex items-center justify-center">

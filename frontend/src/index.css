@@ -1,41 +1,44 @@
 @import "tailwindcss";
 
-/* Custom CSS variables for our medical trust theme */
+/* Professional light theme - white base with accent colors */
 @theme {
-  /* Rich, clinical color palette */
-  --color-trust-high: #10b981;
-  --color-trust-medium: #f59e0b;
-  --color-trust-low: #ef4444;
-  
-  /* Background tones */
-  --color-surface: #0f172a;
-  --color-surface-elevated: #1e293b;
-  --color-surface-hover: #334155;
-  
-  /* Accent colors */
-  --color-accent: #3b82f6;
-  --color-accent-hover: #60a5fa;
-  
-  /* Text colors */
-  --color-text-primary: #f1f5f9;
-  --color-text-secondary: #94a3b8;
+  /* Confidence / trust levels */
+  --color-trust-high: #059669;
+  --color-trust-medium: #d97706;
+  --color-trust-low: #dc2626;
+
+  /* Backgrounds - white and subtle grays */
+  --color-surface: #ffffff;
+  --color-surface-elevated: #f8fafc;
+  --color-surface-hover: #e2e8f0;
+
+  /* Primary accent - professional blue */
+  --color-accent: #1d4ed8;
+  --color-accent-hover: #2563eb;
+
+  /* Text */
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
   --color-text-muted: #64748b;
-  
+
   /* Evidence relationship colors */
-  --color-supports: #22c55e;
-  --color-contradicts: #ef4444;
-  --color-neutral: #6b7280;
-  
-  /* Fonts */
-  --font-display: "DM Sans", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  --color-supports: #059669;
+  --color-contradicts: #dc2626;
+  --color-neutral: #64748b;
+
+  /* Typography - professional sans + monospace */
+  --font-display: "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Consolas, monospace;
 }
 
 /* Base styles */
 body {
   font-family: var(--font-display);
-  background: linear-gradient(135deg, var(--color-surface) 0%, #1a1a2e 100%);
+  background: var(--color-surface);
+  color: var(--color-text-primary);
   min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* Scrollbar styling */
@@ -45,7 +48,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--color-surface);
+  background: var(--color-surface-elevated);
 }
 
 ::-webkit-scrollbar-thumb {

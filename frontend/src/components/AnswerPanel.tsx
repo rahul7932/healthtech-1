@@ -70,7 +70,7 @@ export function AnswerPanel({ report }: AnswerPanelProps) {
         <h2 className="text-xl font-semibold text-text-primary">Answer</h2>
       </div>
 
-      <div className="prose prose-invert max-w-none">
+      <div className="max-w-none">
         <p className="text-text-primary leading-relaxed whitespace-pre-wrap">
           {formattedAnswer.map((part, i) => {
             if (typeof part === 'string') {
